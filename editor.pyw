@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-import sys, os, io, json, threading, zipfile, re, time, subprocess
+import sys, os, io, json, threading, zipfile, re, time, subprocess, concurrent.futures
 import customtkinter as ctk
 from tkinter import filedialog, messagebox
 from urllib.request import urlopen, Request
@@ -7,7 +7,7 @@ from urllib.request import urlopen, Request
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from vexlang import Lexer, Parser, Interpreter, SLOWA_KLUCZOWE, KOLORY_ANSI, KOLORY_HEX
 
-VERSION = "2.2.0"
+VERSION = "2.3.0"
 GITHUB_REPO = "wk12100lol-prog/vexlang"
 
 try:
@@ -597,14 +597,28 @@ def _tokenize(line):
     return res
 
 
+def _wheel_wspiera_windows(filename):
+    """Sprawdza czy wheel (.whl) dziala na Windows po nazwie pliku."""
+    if not filename.lower().endswith(".whl"):
+        return False
+    plat = filename[:-4].split("-")[-1].lower()
+    return plat == "any" or plat.startswith("win")
+
+
+def _pypi_wspiera_windows(data):
+    """Sprawdza w danych JSON z PyPI czy paczka ma wheela na Windows."""
+    for url in data.get("urls", []):
+        if url.get("packagetype") == "bdist_wheel" and _wheel_wspiera_windows(url.get("filename", "")):
+            return True
+    return False
+
+
 def _is_num(s):
     try:
         float(s)
         return True
     except:
         return False
-
-
 class BibliotekiWindow(ctk.CTkToplevel):
     def __init__(self, parent):
         super().__init__(parent)
@@ -615,6 +629,7 @@ class BibliotekiWindow(ctk.CTkToplevel):
         self.after(100, self.lift)
 
         self._wyniki = []
+        self._windows_packages = set()
         self._instalowane = []
         self._selected_pkg = None
         self._selected_inst = None
@@ -682,9 +697,8 @@ class BibliotekiWindow(ctk.CTkToplevel):
     def _szukaj_watek(self, q):
         try:
             from urllib.request import urlopen, Request
-            # PyPI JSON search API
             url = f"https://pypi.org/simple/{q}/"
-            req = Request(url, headers={"User-Agent": "VEXLang/2.1"})
+            req = Request(url, headers={"User-Agent": "VEXLang/2.3"})
             resp = urlopen(req, timeout=10)
             html = resp.read().decode()
             names = []
@@ -692,13 +706,35 @@ class BibliotekiWindow(ctk.CTkToplevel):
                 name = m.group(1).strip()
                 if q.lower() in name.lower():
                     names.append(name)
-            self._wyniki = names[:60]
+            names = names[:40]
+
+            # sprawdz Windows-kompatybilność dla kazdej (wielowatkowo)
+            win_set = set()
+            with concurrent.futures.ThreadPoolExecutor(max_workers=10) as ex:
+                fut = {ex.submit(self._fetch_pypi_json, n): n for n in names}
+                for f in concurrent.futures.as_completed(fut):
+                    n = fut[f]
+                    try:
+                        data = f.result()
+                        if data and _pypi_wspiera_windows(data):
+                            win_set.add(n)
+                    except:
+                        pass
+
+            self._wyniki = names
+            self._windows_packages = win_set
             self.after(0, self._pokaz_wyniki)
         except Exception as e:
             self.after(0, lambda: self._czysc_frame(self._results_frame))
             self.after(0, lambda: ctk.CTkLabel(
                 self._results_frame, text=f"Błąd: {e}\nSprawdź połączenie.",
                 font=ctk.CTkFont(size=11), text_color="#ef4444").pack(pady=10))
+
+    def _fetch_pypi_json(self, name):
+        from urllib.request import urlopen, Request
+        req = Request(f"https://pypi.org/pypi/{name}/json",
+                      headers={"User-Agent": "VEXLang/2.3"})
+        return json.loads(urlopen(req, timeout=5).read().decode())
 
     def _pokaz_wyniki(self):
         self._czysc_frame(self._results_frame)
@@ -707,14 +743,20 @@ class BibliotekiWindow(ctk.CTkToplevel):
                          font=ctk.CTkFont(size=11)).pack(pady=10)
             return
         for name in self._wyniki:
+            f = ctk.CTkFrame(self._results_frame, fg_color="transparent")
+            f.pack(fill="x", padx=4, pady=1)
+            if name in getattr(self, "_windows_packages", set()):
+                badge = "🟢 Win"
+            else:
+                badge = "⚪"
             btn = ctk.CTkButton(
-                self._results_frame, text=name,
+                f, text=f"{badge}  {name}",
                 font=ctk.CTkFont(size=11),
                 fg_color="#141726", hover_color="#1e2240",
                 anchor="w", height=26,
                 command=lambda n=name: self._wybierz_pakiet(n)
             )
-            btn.pack(fill="x", padx=4, pady=1)
+            btn.pack(fill="x")
 
     def _wybierz_pakiet(self, name):
         self._selected_pkg = name
