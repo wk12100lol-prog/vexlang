@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head><meta charset="UTF-8"><title>VEXLANG – Funkcje wbudowane</title>
+<style>
+  body { font-family: 'Segoe UI', sans-serif; background: #0f1220; color: #c8ccd4; margin: 0; padding: 20px; }
+  h1 { color: #ff6b9d; border-bottom: 1px solid #2a2d4e; }
+  h2 { color: #40bfff; margin-top: 30px; }
+  table { width: 100%; border-collapse: collapse; margin: 10px 0; }
+  th, td { text-align: left; padding: 8px 12px; border-bottom: 1px solid #1a1d35; }
+  th { color: #ffa640; font-weight: bold; background: #151830; }
+  td { font-family: 'Consolas', monospace; font-size: 13px; }
+  .desc { color: #888; font-family: 'Segoe UI', sans-serif; font-size: 12px; }
+  .example { color: #00ffa3; }
+  code { background: #1a1d35; padding: 2px 6px; border-radius: 3px; color: #ffa640; }
+  .cat { color: #a855f7; font-weight: bold; }
+</style></head>
+<body>
+<h1>VEXLANG – Funkcje wbudowane</h1>
+<p>Wszystkie funkcje wbudowane w języku VEXLANG v2.5.</p>
+
+<h2>Matematyczne</h2>
+<table>
+<tr><th>Funkcja</th><th>Opis</th><th>Przykład</th></tr>
+<tr><td>abs(x)</td><td>Wartość bezwzględna</td><td class="example">abs(-5) → 5</td></tr>
+<tr><td>sqrt(x)</td><td>Pierwiastek kwadratowy</td><td class="example">sqrt(9) → 3.0</td></tr>
+<tr><td>pierwiastek(x)</td><td>Alias sqrt</td><td class="example">pierwiastek(16) → 4.0</td></tr>
+<tr><td>sin(x)</td><td>Sinus (radiany)</td><td class="example">sin(0) → 0.0</td></tr>
+<tr><td>cos(x)</td><td>Cosinus (radiany)</td><td class="example">cos(0) → 1.0</td></tr>
+<tr><td>flr(x)</td><td>Podłoga (zaokrąglenie w dół)</td><td class="example">flr(3.7) → 3</td></tr>
+<tr><td>ceil(x)</td><td>Sufit (zaokrąglenie w górę)</td><td class="example">ceil(3.2) → 4</td></tr>
+<tr><td>zaokraglij(x)</td><td>Zaokrąglenie</td><td class="example">zaokraglij(3.7) → 4</td></tr>
+<tr><td>zaokraglij(x, n)</td><td>Zaokrąglenie do n miejsc</td><td class="example">zaokraglij(3.1415, 2) → 3.14</td></tr>
+<tr><td>potega(x, y)</td><td>Potęgowanie x^y</td><td class="example">potega(2, 3) → 8</td></tr>
+<tr><td>log(x)</td><td>Logarytm naturalny</td><td class="example">log(2.718) → 1.0</td></tr>
+<tr><td>log(x, podstawa)</td><td>Logarytm o podstawie</td><td class="example">log(100, 10) → 2.0</td></tr>
+<tr><td>min(a, b, ...)</td><td>Minimum z argumentów</td><td class="example">min(3, 1, 4) → 1</td></tr>
+<tr><td>max(a, b, ...)</td><td>Maksimum z argumentów</td><td class="example">max(3, 1, 4) → 4</td></tr>
+<tr><td>losuj()</td><td>Losowa liczba 0..1</td><td class="example">losuj() → 0.374</td></tr>
+<tr><td>losuj(min, max)</td><td>Losowa liczba całkowita z zakresu</td><td class="example">losuj(1, 6) → 4</td></tr>
+</table>
+
+<h2>Tekstowe (String)</h2>
+<table>
+<tr><th>Funkcja</th><th>Opis</th><th>Przykład</th></tr>
+<tr><td>dlugosc(t)</td><td>Długość tekstu/listy/słownika</td><td class="example">dlugosc("hello") → 5</td></tr>
+<tr><td>wielkie(t)</td><td>Zamień na wielkie litery</td><td class="example">wielkie("a") → "A"</td></tr>
+<tr><td>male(t)</td><td>Zamień na małe litery</td><td class="example">male("A") → "a"</td></tr>
+<tr><td>przytnij(t)</td><td>Usuń białe znaki z końców</td><td class="example">przytnij("  a  ") → "a"</td></tr>
+<tr><td>znajdz(t, szukaj)</td><td>Znajdź pozycję fragmentu</td><td class="example">znajdz("hello", "el") → 1</td></tr>
+<tr><td>zawiera(t, fragment)</td><td>Czy zawiera fragment?</td><td class="example">zawiera("hello", "el") → True</td></tr>
+<tr><td>zastep(t, stary, nowy)</td><td>Zamień wszystkie wystąpienia</td><td class="example">zastep("aba", "a", "x") → "xbx"</td></tr>
+<tr><td>zamien(t, stary, nowy)</td><td>Alias zastep</td><td class="example">zamien("a", "a", "b") → "b"</td></tr>
+<tr><td>dziel(t, sep)</td><td>Podziel tekst na listę</td><td class="example">dziel("a,b,c", ",") → ["a","b","c"]</td></tr>
+<tr><td>podziel(t, sep)</td><td>Alias dziel</td><td class="example">podziel("a b", " ") → ["a","b"]</td></tr>
+<tr><td>laczenie(lista, sep)</td><td>Połącz listę tekstem</td><td class="example">laczenie(["a","b"], "-") → "a-b"</td></tr>
+<tr><td>lacz(lista, sep)</td><td>Alias laczenie</td><td class="example">lacz(["x","y"], "") → "xy"</td></tr>
+<tr><td>zaczyna_sie(t, pref)</td><td>Czy zaczyna się od?</td><td class="example">zaczyna_sie("hello", "he") → True</td></tr>
+<tr><td>konczy_sie(t, suf)</td><td>Czy kończy się na?</td><td class="example">konczy_sie("hello", "lo") → True</td></tr>
+<tr><td>policz(t, frag)</td><td>Policz wystąpienia fragmentu</td><td class="example">policz("banana", "na") → 2</td></tr>
+<tr><td>znak(kod)</td><td>Znak z kodu ASCII</td><td class="example">znak(65) → "A"</td></tr>
+<tr><td>kod_znaku(z)</td><td>Kod ASCII znaku</td><td class="example">kod_znaku("A") → 65</td></tr>
+</table>
+
+<h2>Listy</h2>
+<table>
+<tr><th>Funkcja</th><th>Opis</th><th>Przykład</th></tr>
+<tr><td>zakres(n)</td><td>Lista 0..n-1</td><td class="example">zakres(3) → [0,1,2]</td></tr>
+<tr><td>zakres(a, b)</td><td>Lista a..b-1</td><td class="example">zakres(2, 5) → [2,3,4]</td></tr>
+<tr><td>zakres(a, b, krok)</td><td>Lista z krokiem</td><td class="example">zakres(0, 10, 2) → [0,2,4,6,8]</td></tr>
+<tr><td>dodaj(lista, el)</td><td>Dodaj element na koniec</td><td class="example">dodaj([1,2], 3) → [1,2,3]</td></tr>
+<tr><td>usun(lista, i)</td><td>Usuń element pod indeksem</td><td class="example">usun([1,2,3], 1) → 2</td></tr>
+<tr><td>odwroc(lista)</td><td>Odwróć listę</td><td class="example">odwroc([1,2,3]) → [3,2,1]</td></tr>
+<tr><td>sortuj(lista)</td><td>Posortuj listę</td><td class="example">sortuj([3,1,2]) → [1,2,3]</td></tr>
+<tr><td>suma(lista)</td><td>Suma elementów</td><td class="example">suma([1,2,3]) → 6</td></tr>
+<tr><td>srednia(lista)</td><td>Średnia elementów</td><td class="example">srednia([1,2,3]) → 2.0</td></tr>
+<tr><td>mapuj(f, lista)</td><td>Zastosuj funkcję do każdego</td><td class="example">mapuj(f(x)=>x*2, [1,2,3]) → [2,4,6]</td></tr>
+<tr><td>filtruj(f, lista)</td><td>Filtruj listę funkcją</td><td class="example">filtruj(f(x)=>x>1, [1,2,3]) → [2,3]</td></tr>
+<tr><td>wszystko(lista)</td><td>Czy wszystkie prawdziwe?</td><td class="example">wszystko([1,2,3]) → True</td></tr>
+<tr><td>jakiekolwiek(lista)</td><td>Czy jakikolwiek prawdziwy?</td><td class="example">jakiekolwiek([0,nic,falsz]) → False</td></tr>
+<tr><td>wylicz(lista)</td><td>Pary (indeks, wartość)</td><td class="example">wylicz(["a","b"]) → [[0,"a"],[1,"b"]]</td></tr>
+</table>
+
+<h2>Konwersja typów</h2>
+<table>
+<tr><th>Funkcja</th><th>Opis</th><th>Przykład</th></tr>
+<tr><td>konwert("licz", x)</td><td>Konwersja na liczbę</td><td class="example">konwert("licz", "42") → 42</td></tr>
+<tr><td>konwert("tekst", x)</td><td>Konwersja na tekst</td><td class="example">konwert("tekst", 42) → "42"</td></tr>
+<tr><td>konwert("logiczna", x)</td><td>Konwersja na logiczną</td><td class="example">konwert("logiczna", 1) → True</td></tr>
+<tr><td>typ(x)</td><td>Zwraca typ jako tekst</td><td class="example">typ(42) → "liczba"</td></tr>
+</table>
+
+<h2>Słowniki</h2>
+<table>
+<tr><th>Funkcja</th><th>Opis</th><th>Przykład</th></tr>
+<tr><td>klucze(slownik)</td><td>Lista kluczy</td><td class="example">klucze({"a":1}) → ["a"]</td></tr>
+<tr><td>wartosci(slownik)</td><td>Lista wartości</td><td class="example">wartosci({"a":1}) → [1]</td></tr>
+</table>
+
+<h2>Systemowe</h2>
+<table>
+<tr><th>Funkcja</th><th>Opis</th><th>Przykład</th></tr>
+<tr><td>pisz(x)</td><td>Wypisz na konsolę</td><td class="example">pisz("hello")</td></tr>
+<tr><td>pisz_kolorowo(t, kolor)</td><td>Wypisz kolorowym tekstem</td><td class="example">pisz_kolorowo("uwaga", "czerwony")</td></tr>
+<tr><td>czysc()</td><td>Wyczyść konsolę</td><td class="example">czysc()</td></tr>
+<tr><td>czysc_konsola()</td><td>Alias czysc</td><td class="example">czysc_konsola()</td></tr>
+<tr><td>czekaj(ms)</td><td>Czekaj milisekund</td><td class="example">czekaj(1000)</td></tr>
+<tr><td>zakoncz(kod)</td><td>Zakończ program</td><td class="example">zakoncz(0)</td></tr>
+<tr><td>data()</td><td>Dzisiejsza data</td><td class="example">data() → "2026-01-15"</td></tr>
+<tr><td>czas()</td><td>Aktualny czas</td><td class="example">czas() → "14:30:00"</td></tr>
+</table>
+
+<h2>Kolory dla pisz_kolorowo</h2>
+<table>
+<tr><th>Kolor</th><th>Wartość</th></tr>
+<tr><td>czerwony</td><td>#ef4444</td></tr>
+<tr><td>zielony</td><td>#00ffa3</td></tr>
+<tr><td>zolty</td><td>#ffd700</td></tr>
+<tr><td>niebieski</td><td>#40bfff</td></tr>
+<tr><td>fioletowy</td><td>#a855f7</td></tr>
+<tr><td>cyjan</td><td>#00ffff</td></tr>
+<tr><td>bialy</td><td>#ffffff</td></tr>
+<tr><td>rozowy</td><td>#ff6b9d</td></tr>
+<tr><td>pomaranczowy</td><td>#ffa640</td></tr>
+<tr><td>szary</td><td>#888888</td></tr>
+</table>
+
+</body></html>

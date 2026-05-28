@@ -7,7 +7,7 @@ from urllib.request import urlopen, Request
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from vexlang import Lexer, Parser, Interpreter, SLOWA_KLUCZOWE, KOLORY_ANSI, KOLORY_HEX
 
-VERSION = "2.4.1"
+VERSION = "2.5.0"
 GITHUB_REPO = "wk12100lol-prog/vexlang"
 
 try:
@@ -50,7 +50,7 @@ class VEXLangEditor(ctk.CTk):
         ctk.CTkLabel(hdr, text="VEXLang", font=ctk.CTkFont(size=15, weight="bold"),
                      text_color="#ff6b9d").pack(side="left", padx=10)
 
-        self._python_cmd = ctk.StringVar(value="python")
+        self._python_cmd = ctk.StringVar(value="py")
         py_menu = ctk.CTkOptionMenu(hdr, values=["python", "py"], variable=self._python_cmd,
                                      width=50, height=22, font=ctk.CTkFont(size=9))
         py_menu.pack(side="left", padx=2)
@@ -293,7 +293,11 @@ class VEXLangEditor(ctk.CTk):
                              "sqrt","sin","cos","flr","ceil","zawiera","zastep","dziel",
                              "laczenie","wielkie","male","przytnij","znajdz","dodaj","usun",
                              "odwroc","sortuj","suma","srednia","czysc","czekaj","zakoncz",
-                             "data","czas","klucze","wartosci"):
+                             "data","czas","klucze","wartosci","pisz","pisz_kolorowo",
+                             "czysc_konsola","typ","zakres","mapuj","filtruj",
+                             "wszystko","jakiekolwiek","potega","log","znak","kod_znaku",
+                             "zaczyna_sie","konczy_sie","policz","wylicz","podziel",
+                             "lacz","pierwiastek","zamien"):
                     tb.tag_add("blt", f"{i}.{s}", f"{i}.{e}")
                 elif _is_num(tok):
                     tb.tag_add("num", f"{i}.{s}", f"{i}.{e}")

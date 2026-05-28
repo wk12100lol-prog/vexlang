@@ -107,3 +107,22 @@ pisz "Po komentarzu"
 pisz ""
 pisz "=== POJEDYNCZY CUDZYSŁOW ==="
 pisz 'mozna uzywac pojedynczego cudzyslowu tez'
+
+pisz ""
+pisz "=== NOWE FUNKCJE v2.5 ==="
+pisz "typ(42) = " + typ(42)
+pisz "zakres(5) = " + zakres(5)
+pisz "potega(2,3) = " + potega(2,3)
+pisz "znak(65) = " + znak(65)
+pisz "zaczyna_sie('hello', 'he') = " + zaczyna_sie('hello', 'he')
+pisz "policz('banana', 'na') = " + policz('banana', 'na')
+pisz "wszystko([1,2,3]) = " + wszystko([1,2,3])
+dla x w zakres(3) {
+    pisz "  zakres x=" + x
+}
+pisz ""
+pisz "=== MAPUJ Z LAMBDA ==="
+pisz "mapuj(f(x)=>x*2, [1,2,3]) = " + mapuj(funkcja(x) => x*2, [1,2,3])
+pisz "filtruj(f(x)=>x>1, [1,2,3]) = " + filtruj(funkcja(x) => x>1, [1,2,3])
+czysc_konsola()
+pisz "Konsola wyczyszczona!"

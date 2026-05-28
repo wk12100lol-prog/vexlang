@@ -69,7 +69,7 @@ SLOWA_KLUCZOWE = {
     "jeśli", "jesli", "to", "inaczej", "dopóki", "dopoki", "dla", "w", "az",
     "funkcja", "zwróć", "zwroc", "pisz", "pisz_kolorowo", "czytaj", "czysc",
     "lub", "nie", "i", "tablica", "slownik",
-    "przerwij", "kontynuuj", "zakres", "wybierz", "zakoncz", "czekaj",
+    "przerwij", "kontynuuj", "wybierz", "zakoncz", "czekaj",
 }
 
 
@@ -294,9 +294,10 @@ class Indeksowanie(AST):
 
 
 class Zakres(AST):
-    def __init__(self, start, koniec):
+    def __init__(self, start, koniec, krok=None):
         self.start = start
         self.koniec = koniec
+        self.krok = krok
 
     def __repr__(self):
         return f"Zakres({self.start}..{self.koniec})"
@@ -816,11 +817,19 @@ class Parser:
         if tok.typ == "ZAKRES":
             self.spozywaj()
             self.spozywaj("LEWY_NAWIAS")
-            start = self.wyrazenie()
-            self.spozywaj("PRZECINEK")
-            koniec = self.wyrazenie()
+            arg1 = self.wyrazenie()
+            if self.sprawdz("PRZECINEK"):
+                self.spozywaj()
+                arg2 = self.wyrazenie()
+                if self.sprawdz("PRZECINEK"):
+                    self.spozywaj()
+                    arg3 = self.wyrazenie()
+                    self.spozywaj("PRAWY_NAWIAS")
+                    return Zakres(arg1, arg2, arg3)
+                self.spozywaj("PRAWY_NAWIAS")
+                return Zakres(arg1, arg2)
             self.spozywaj("PRAWY_NAWIAS")
-            return Zakres(start, koniec)
+            return Zakres(None, arg1)
         if tok.typ == "FUNKCJA":
             return self.parse_lambda()
         if tok.typ == "JEŚLI":
@@ -933,14 +942,28 @@ class Kontekst:
 
 
 class FunkcjaVEX:
-    def __init__(self, nazwa, parametry, cialo, domkniecie):
+    def __init__(self, nazwa, parametry, cialo, domkniecie, interpreter=None):
         self.nazwa = nazwa
         self.parametry = parametry
         self.cialo = cialo
         self.domkniecie = domkniecie
+        self.interpreter = interpreter
 
     def __repr__(self):
         return f"<funkcja {self.nazwa}({', '.join(self.parametry)})>"
+
+    def wywolaj(self, argumenty):
+        lokalny = Kontekst(self.domkniecie)
+        for p, a in zip(self.parametry, argumenty):
+            lokalny.ustaw(p, a)
+        for inst in self.cialo.instrukcje:
+            if isinstance(inst, Zwroc):
+                return self.interpreter.ewaluuj(inst.wyrazenie, lokalny)
+            self.interpreter.wykonaj_instrukcje(inst, lokalny)
+        return None
+
+    def __call__(self, argumenty):
+        return self.wywolaj(argumenty)
 
 
 class Wbudowane:
@@ -1159,6 +1182,141 @@ class Wbudowane:
             raise BladWykonania("wartosci() wymaga slownika")
         return list(args[0].values())
 
+    # ── NOWE FUNKCJE v2.5 ──
+
+    @staticmethod
+    def czysc_konsola(args):
+        """Czyści całą konsolę (jak cls/clear)."""
+        if sys.stdout.isatty():
+            os.system("cls" if os.name == "nt" else "clear")
+        return None
+
+    @staticmethod
+    def typf(args):
+        """Zwraca typ wartości jako tekst."""
+        if len(args) != 1:
+            raise BladWykonania("typ() wymaga 1 argumentu")
+        v = args[0]
+        if isinstance(v, int): return "liczba"
+        if isinstance(v, float): return "liczba"
+        if isinstance(v, str): return "tekst"
+        if isinstance(v, list): return "lista"
+        if isinstance(v, dict): return "slownik"
+        if isinstance(v, bool): return "logiczna"
+        if isinstance(v, type(None)): return "nic"
+        return "nieznany"
+
+    @staticmethod
+    def zakresf(args):
+        """Zwraca listę liczb: zakres(5) → [0,1,2,3,4]"""
+        if len(args) == 1:
+            return list(range(int(args[0])))
+        if len(args) == 2:
+            return list(range(int(args[0]), int(args[1])))
+        if len(args) == 3:
+            return list(range(int(args[0]), int(args[1]), int(args[2])))
+        raise BladWykonania("zakres() wymaga 1-3 argumentow")
+
+    @staticmethod
+    def mapujf(args):
+        """Stosuje funkcję do każdego elementu listy: mapuj(f, [1,2,3])"""
+        if len(args) != 2:
+            raise BladWykonania("mapuj(funkcja, lista) wymaga 2 argumentow")
+        fn, lst = args[0], args[1]
+        if not isinstance(lst, list):
+            raise BladWykonania("mapuj() - drugi argument musi byc lista")
+        if callable(fn):
+            return [fn([x]) for x in lst]
+        if isinstance(fn, FunkcjaVEX):
+            return [fn.wywolaj([x]) for x in lst]
+        raise BladWykonania("mapuj() - pierwszy argument musi byc funkcja")
+
+    @staticmethod
+    def filtrujf(args):
+        """Filtruje listę: filtruj(f, [1,2,3]) → elementy gdzie f(x) == True"""
+        if len(args) != 2:
+            raise BladWykonania("filtruj(funkcja, lista) wymaga 2 argumentow")
+        fn, lst = args[0], args[1]
+        if not isinstance(lst, list):
+            raise BladWykonania("filtruj() - drugi argument musi byc lista")
+        if callable(fn):
+            return [x for x in lst if fn([x])]
+        if isinstance(fn, FunkcjaVEX):
+            return [x for x in lst if fn.wywolaj([x])]
+        raise BladWykonania("filtruj() - pierwszy argument musi byc funkcja")
+
+    @staticmethod
+    def wszystko(args):
+        """Sprawdza czy wszystkie elementy są prawdziwe: wszystko([True, 1, 'a'])"""
+        if len(args) != 1 or not isinstance(args[0], list):
+            raise BladWykonania("wszystko() wymaga listy")
+        return all(args[0])
+
+    @staticmethod
+    def jakiekolwiek(args):
+        """Sprawdza czy jakikolwiek element jest prawdziwy: jakiekolwiek([False, 0, 'a'])"""
+        if len(args) != 1 or not isinstance(args[0], list):
+            raise BladWykonania("jakiekolwiek() wymaga listy")
+        return any(args[0])
+
+    @staticmethod
+    def potegaf(args):
+        """Potęgowanie: potega(2, 3) → 8"""
+        if len(args) != 2:
+            raise BladWykonania("potega() wymaga 2 argumentow")
+        return args[0] ** args[1]
+
+    @staticmethod
+    def logf(args):
+        """Logarytm: log(100) lub log(100, 10)"""
+        if len(args) == 1:
+            return math.log(args[0])
+        if len(args) == 2:
+            return math.log(args[0], args[1])
+        raise BladWykonania("log() wymaga 1 lub 2 argumentow")
+
+    @staticmethod
+    def znakf(args):
+        """Znak z kodu ASCII: znak(65) → 'A'"""
+        if len(args) != 1:
+            raise BladWykonania("znak() wymaga 1 argumentu")
+        return chr(int(args[0]))
+
+    @staticmethod
+    def kod_znaku(args):
+        """Kod ASCII znaku: kod_znaku('A') → 65"""
+        if len(args) != 1 or not isinstance(args[0], str) or len(args[0]) == 0:
+            raise BladWykonania("kod_znaku() wymaga 1 znaku")
+        return ord(args[0][0])
+
+    @staticmethod
+    def zaczyna_sie(args):
+        """Sprawdza czy tekst zaczyna się od prefixu"""
+        if len(args) != 2:
+            raise BladWykonania("zaczyna_sie() wymaga 2 argumentow")
+        return args[0].startswith(args[1])
+
+    @staticmethod
+    def konczy_sie(args):
+        """Sprawdza czy tekst kończy się na sufiks"""
+        if len(args) != 2:
+            raise BladWykonania("konczy_sie() wymaga 2 argumentow")
+        return args[0].endswith(args[1])
+
+    @staticmethod
+    def liczf(args):
+        """Liczy wystąpienia fragmentu w tekście"""
+        if len(args) != 2:
+            raise BladWykonania("licz() wymaga 2 argumentow")
+        return args[0].count(args[1])
+
+    @staticmethod
+    def wyliczf(args):
+        """Zwraca listę par (indeks, wartość)"""
+        if len(args) != 1 or not isinstance(args[0], list):
+            raise BladWykonania("wylicz() wymaga listy")
+        return [[i, args[0][i]] for i in range(len(args[0]))]
+
 
 WBUDOWANE = {
     "dlugosc": Wbudowane.dlugosc,
@@ -1195,6 +1353,26 @@ WBUDOWANE = {
     "klucze": Wbudowane.klucze,
     "wartosci": Wbudowane.wartosci,
     "pisz": lambda args: (print(*[_reprezentacja(a) for a in args]), None)[1],
+    # nowe v2.5
+    "czysc_konsola": Wbudowane.czysc_konsola,
+    "typ": Wbudowane.typf,
+    "zakres": Wbudowane.zakresf,
+    "mapuj": Wbudowane.mapujf,
+    "filtruj": Wbudowane.filtrujf,
+    "wszystko": Wbudowane.wszystko,
+    "jakiekolwiek": Wbudowane.jakiekolwiek,
+    "potega": Wbudowane.potegaf,
+    "log": Wbudowane.logf,
+    "znak": Wbudowane.znakf,
+    "kod_znaku": Wbudowane.kod_znaku,
+    "zaczyna_sie": Wbudowane.zaczyna_sie,
+    "konczy_sie": Wbudowane.konczy_sie,
+    "policz": Wbudowane.liczf,
+    "wylicz": Wbudowane.wyliczf,
+    "podziel": Wbudowane.dziel,
+    "lacz": Wbudowane.laczenie,
+    "pierwiastek": Wbudowane.sqrt,
+    "zamien": Wbudowane.zastep,
 }
 
 
@@ -1208,7 +1386,7 @@ class Interpreter:
     def wykonaj(self, program):
         for d in program.deklaracje:
             if isinstance(d, DeklaracjaFunkcji):
-                fn = FunkcjaVEX(d.nazwa, d.parametry, d.cialo, self.globalny)
+                fn = FunkcjaVEX(d.nazwa, d.parametry, d.cialo, self.globalny, self)
                 self.funkcje[d.nazwa] = fn
         wynik = None
         for d in program.deklaracje:
@@ -1422,9 +1600,10 @@ class Interpreter:
             return obiekt[int(indeks)]
 
         if isinstance(wyrazenie, Zakres):
-            start = int(self.ewaluuj(wyrazenie.start, kontekst))
-            koniec = int(self.ewaluuj(wyrazenie.koniec, kontekst))
-            return list(range(start, koniec + 1))
+            start = self.ewaluuj(wyrazenie.start, kontekst) if wyrazenie.start is not None else 0
+            koniec = self.ewaluuj(wyrazenie.koniec, kontekst)
+            krok = self.ewaluuj(wyrazenie.krok, kontekst) if wyrazenie.krok is not None else 1
+            return list(range(int(start), int(koniec), int(krok)))
 
         if isinstance(wyrazenie, WywolanieFunkcji):
             argi = [self.ewaluuj(a, kontekst) for a in wyrazenie.argumenty]
@@ -1436,7 +1615,7 @@ class Interpreter:
             return self.ewaluuj(wyrazenie.inaczej, kontekst)
 
         if isinstance(wyrazenie, Lambda):
-            fn = FunkcjaVEX("<lambda>", wyrazenie.parametry, wyrazenie.cialo, kontekst)
+            fn = FunkcjaVEX("<lambda>", wyrazenie.parametry, wyrazenie.cialo, kontekst, self)
             return fn
 
         if isinstance(wyrazenie, Czytaj):
@@ -1454,6 +1633,8 @@ class Interpreter:
             return WBUDOWANE[nazwa](argumenty)
         if nazwa in self.funkcje:
             fn = self.funkcje[nazwa]
+            if not fn.interpreter:
+                fn.interpreter = self
             lokalny = Kontekst(fn.domkniecie if hasattr(fn, 'domkniecie') else self.globalny)
             for p, a in zip(fn.parametry, argumenty):
                 lokalny.ustaw(p, a)
