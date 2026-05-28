@@ -7,7 +7,7 @@ from urllib.request import urlopen, Request
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from vexlang import Lexer, Parser, Interpreter, SLOWA_KLUCZOWE, KOLORY_ANSI, KOLORY_HEX
 
-VERSION = "2.3.1"
+VERSION = "2.4.0"
 GITHUB_REPO = "wk12100lol-prog/vexlang"
 
 try:
@@ -123,10 +123,12 @@ class VEXLangEditor(ctk.CTk):
         self._tb.tag_config("cm", foreground="#4a4d5e")
         self._tb.tag_config("num", foreground="#ffa640")
         self._tb.tag_config("blt", foreground="#40bfff")
-        self._tb.tag_config("sel", foreground="#0a0c14", background="#ff6b9d")
+        self._tb.tag_config("sel", foreground="#ffffff", background="#6a2a8a")
+        self._tb.tag_config("curline", background="#151830")
+        self._tb.tag_config("bracket", foreground="#0a0c14", background="#ff6b9d")
 
         self._tb.configure(
-            selectbackground="#3a1a40", selectforeground="#c8ccd4",
+            selectbackground="#5a2a7a", selectforeground="#ffffff",
             insertbackground="#ff6b9d", padx=12, pady=8
         )
         self._line_canvas.configure(bg="#0f1220")
@@ -180,7 +182,7 @@ class VEXLangEditor(ctk.CTk):
 
     def _setup_binds(self):
         self._tb.bind("<KeyRelease>", self._on_change)
-        self._tb.bind("<ButtonRelease-1>", lambda e: self._update_status())
+        self._tb.bind("<ButtonRelease-1>", self._on_click)
         self._tb.bind("<KeyPress>", lambda e: self.after(5, self._update_status))
         self._tb.bind("<Tab>", lambda e: self._tab(e))
         self._tb.bind("<Control-n>", lambda e: self._new())
@@ -200,6 +202,57 @@ class VEXLangEditor(ctk.CTk):
         self._highlight_timer = self.after(200, self._highlight)
         self._draw_lines()
         self._update_status()
+        self._update_curline()
+        self._match_bracket()
+
+    def _on_click(self, e=None):
+        self._update_status()
+        self._update_curline()
+        self._match_bracket()
+
+    _BRACKETS = {"(": ")", ")": "(", "[": "]", "]": "[", "{": "}", "}": "{"}
+
+    def _match_bracket(self):
+        self._tb.tag_remove("bracket", "1.0", "end")
+        pos = self._tb.index("insert")
+        row, col = pos.split(".")
+        row, col = int(row), int(col)
+        for off in (0, -1):
+            ccol = col + off
+            if ccol < 0:
+                continue
+            ch = self._tb.get(f"{row}.{ccol}", f"{row}.{ccol+1}")
+            if ch in self._BRACKETS:
+                self._tb.tag_add("bracket", f"{row}.{ccol}", f"{row}.{ccol+1}")
+                want = self._BRACKETS[ch]
+                step = 1 if ch in "([{" else -1
+                depth = 0
+                lr = row
+                for lr in range(row, 0 if step < 0 else 9999, step):
+                    line = self._tb.get(f"{lr}.0", f"{lr}.end")
+                    cstart = ccol + 1 if lr == row else 0
+                    cend = ccol - 1 if step < 0 and lr == row else len(line) - 1
+                    rng = range(cstart, len(line)) if step > 0 else range(cend, -1, -1)
+                    for c in rng:
+                        if c >= len(line):
+                            break
+                        nc = line[c]
+                        if nc == ch:
+                            depth += 1
+                        elif nc == want:
+                            if depth == 0:
+                                self._tb.tag_add("bracket", f"{lr}.{c}", f"{lr}.{c+1}")
+                                return
+                            depth -= 1
+                break
+
+    def _update_curline(self):
+        self._tb.tag_remove("curline", "1.0", "end")
+        try:
+            ln = self._tb.index("insert").split(".")[0]
+            self._tb.tag_add("curline", f"{ln}.0", f"{ln}.end")
+        except:
+            pass
 
     def _tab(self, e):
         self._txt.insert("insert", "    "); return "break"
