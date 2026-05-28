@@ -766,9 +766,14 @@ class BibliotekiWindow(ctk.CTkToplevel):
         if not self._selected_pkg:
             return
         name = self._selected_pkg
-        info = ctk.CTkLabel(self._results_frame, text=f"Instalowanie {name}...",
-                            font=ctk.CTkFont(size=10), text_color="#ffa640")
-        info.pack(pady=4)
+        # sprawdź czy nazwa nie wygląda jak plik
+        if any(c in name for c in ("/", "\\", ":")) or name.endswith((".zip", ".tar.gz", ".whl", ".tar")):
+            ctk.CTkLabel(self._results_frame,
+                         text=f"❌ To wygląda jak plik, nie nazwa pakietu: {name}",
+                         font=ctk.CTkFont(size=10), text_color="#ef4444").pack(pady=2)
+            return
+        ctk.CTkLabel(self._results_frame, text=f"Instalowanie {name}...",
+                     font=ctk.CTkFont(size=10), text_color="#ffa640").pack(pady=4)
         self._zainstaluj_btn.configure(state="disabled", text="Instalowanie...")
         threading.Thread(target=self._instaluj_watek, args=(name,), daemon=True).start()
 
@@ -778,13 +783,13 @@ class BibliotekiWindow(ctk.CTkToplevel):
             r = subprocess.run([py, "-m", "pip", "install", name],
                                capture_output=True, text=True, timeout=120,
                                creationflags=subprocess.CREATE_NO_WINDOW)
-            out = r.stdout + r.stderr
+            out = (r.stdout + r.stderr).strip()
             ok = "Successfully installed" in out or "already satisfied" in out
-            self.after(0, lambda: ctk.CTkLabel(
-                self._results_frame,
-                text="✔ Gotowe!" if ok else f"❌ Błąd\n{out[:300]}",
+            msg = "✔ Gotowe!" if ok else f"❌ Błąd\n{out[-400:]}"
+            self.after(0, lambda m=msg, c=ok: ctk.CTkLabel(
+                self._results_frame, text=m,
                 font=ctk.CTkFont(size=10),
-                text_color="#00ffa3" if ok else "#ef4444"
+                text_color="#00ffa3" if c else "#ef4444"
             ).pack(pady=2))
             if ok:
                 self.after(500, self._odswiez_instalowane)
