@@ -7,7 +7,7 @@ from urllib.request import urlopen, Request
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from vexlang import Lexer, Parser, Interpreter, SLOWA_KLUCZOWE, KOLORY_ANSI, KOLORY_HEX
 
-VERSION = "2.0.0"
+VERSION = "2.0.1"
 GITHUB_REPO = "wk12100lol-prog/vexlang"
 
 try:
@@ -550,6 +550,26 @@ class VEXLangEditor(ctk.CTk):
             resp = urlopen(Request(zu, headers={"User-Agent": "VEXLang"}), timeout=30)
             d = resp.read()
             base = os.path.dirname(os.path.abspath(__file__))
+
+            # usuń wszystkie stare pliki (oprócz .git i __pycache__)
+            for root, dirs, files in os.walk(base, topdown=True):
+                dirs[:] = [d for d in dirs if d not in (".git", "__pycache__")]
+                for f in files:
+                    fp = os.path.join(root, f)
+                    try:
+                        os.remove(fp)
+                    except:
+                        pass
+            # usuń puste katalogi (oprócz .git)
+            for root, dirs, files in os.walk(base, topdown=False):
+                dirs[:] = [d for d in dirs if d != ".git"]
+                if root != base and not os.listdir(root):
+                    try:
+                        os.rmdir(root)
+                    except:
+                        pass
+
+            # rozpakuj nowe
             with zipfile.ZipFile(io.BytesIO(d)) as z:
                 names = z.namelist()
                 roots = set()
