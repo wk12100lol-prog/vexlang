@@ -1,0 +1,28 @@
+# game.vex - zgadywanka liczbowa
+pisz "=== Zgadnij liczbe ==="
+pisz "Mysle o liczbie od 1 do 100..."
+licz sekret = losuj(1, 100)
+licz proby = 0
+logiczna odgadniete = fałsz
+
+dopóki nie odgadniete to
+{
+    pisz "Podaj liczbe:"
+    tekst wejscie = czytaj()
+    licz strzal = konwert("licz", wejscie)
+    proby = proby + 1
+
+    jeśli strzal == sekret to
+    {
+        pisz "Brawo! Zgadles w " + proby + " probach!"
+        odgadniete = prawda
+    }
+    inaczej jeśli strzal < sekret to
+    {
+        pisz "Za malo!"
+    }
+    inaczej
+    {
+        pisz "Za duzo!"
+    }
+}

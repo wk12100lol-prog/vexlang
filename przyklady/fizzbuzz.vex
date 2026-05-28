@@ -1,0 +1,14 @@
+# fizzbuzz.vex
+funkcja fizzbuzz(n)
+{
+    dla i w zakres(1, n)
+    {
+        jeśli i % 15 == 0 to { pisz "FizzBuzz" }
+        inaczej jeśli i % 3 == 0 to { pisz "Fizz" }
+        inaczej jeśli i % 5 == 0 to { pisz "Buzz" }
+        inaczej { pisz i }
+    }
+}
+
+pisz "FizzBuzz od 1 do 30:"
+fizzbuzz(30)

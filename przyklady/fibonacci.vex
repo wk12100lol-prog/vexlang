@@ -1,0 +1,14 @@
+# fibonacci.vex - ciąg Fibonacciego
+funkcja fib(n)
+{
+    jeśli n <= 1 to
+    {
+        zwróć n
+    }
+    zwróć fib(n - 1) + fib(n - 2)
+}
+
+dla i w zakres(0, 15)
+{
+    pisz "fib(" + i + ") = " + fib(i)
+}
