@@ -7,7 +7,7 @@ from urllib.request import urlopen, Request
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from vexlang import Lexer, Parser, Interpreter, SLOWA_KLUCZOWE, KOLORY_ANSI, KOLORY_HEX
 
-VERSION = "2.1.0"
+VERSION = "2.2.0"
 GITHUB_REPO = "wk12100lol-prog/vexlang"
 
 try:
@@ -585,12 +585,14 @@ class BibliotekiWindow(ctk.CTkToplevel):
         super().__init__(parent)
         self.parent = parent
         self.title("Menadżer bibliotek Python")
-        self.geometry("700x520")
+        self.geometry("720x540")
         self.minsize(500, 400)
         self.after(100, self.lift)
 
         self._wyniki = []
         self._instalowane = []
+        self._selected_pkg = None
+        self._selected_inst = None
 
         main = ctk.CTkFrame(self)
         main.pack(fill="both", expand=True, padx=8, pady=8)
@@ -598,156 +600,217 @@ class BibliotekiWindow(ctk.CTkToplevel):
         self._tabs = ctk.CTkTabview(main, corner_radius=6)
         self._tabs.pack(fill="both", expand=True)
 
-        tab_szukaj = self._tabs.add("Szukaj")
-        tab_zainst = self._tabs.add("Zainstalowane")
+        self._build_search_tab()
+        self._build_installed_tab()
 
-        top = ctk.CTkFrame(tab_szukaj)
+    def _build_search_tab(self):
+        tab = self._tabs.add("Szukaj")
+
+        top = ctk.CTkFrame(tab, height=36)
         top.pack(fill="x", padx=6, pady=6)
+        top.pack_propagate(False)
 
         ctk.CTkLabel(top, text="Szukaj:", font=ctk.CTkFont(size=10)).pack(side="left", padx=4)
         self._search_en = ctk.CTkEntry(top, placeholder_text="nazwa biblioteki...")
         self._search_en.pack(side="left", fill="x", expand=True, padx=4)
         self._search_en.bind("<Return>", lambda e: self._szukaj())
-
         ctk.CTkButton(top, text="🔍", width=32, command=self._szukaj).pack(side="left", padx=2)
 
-        self._results_text = ctk.CTkTextbox(tab_szukaj, font=ctk.CTkFont(size=11))
-        self._results_text.pack(fill="both", expand=True, padx=6, pady=4)
+        self._results_frame = ctk.CTkScrollableFrame(tab, corner_radius=4)
+        self._results_frame.pack(fill="both", expand=True, padx=6, pady=2)
 
-        btn_frame = ctk.CTkFrame(tab_szukaj)
-        btn_frame.pack(fill="x", padx=6, pady=6)
-        self._zainstaluj_btn = ctk.CTkButton(btn_frame, text="Zainstaluj", command=self._zainstaluj, state="disabled")
+        bottom = ctk.CTkFrame(tab, height=36)
+        bottom.pack(fill="x", padx=6, pady=6)
+        bottom.pack_propagate(False)
+        self._zainstaluj_btn = ctk.CTkButton(bottom, text="Zainstaluj", command=self._zainstaluj, state="disabled")
         self._zainstaluj_btn.pack(side="left", padx=4)
-        ctk.CTkLabel(btn_frame, text="Kliknij wynik aby wybrać", font=ctk.CTkFont(size=9)).pack(side="left", padx=8)
 
-        self._installed_text = ctk.CTkTextbox(tab_zainst, font=ctk.CTkFont(size=11))
-        self._installed_text.pack(fill="both", expand=True, padx=6, pady=4)
+    def _build_installed_tab(self):
+        tab = self._tabs.add("Zainstalowane")
 
-        btn_frame2 = ctk.CTkFrame(tab_zainst)
-        btn_frame2.pack(fill="x", padx=6, pady=6)
-        ctk.CTkButton(btn_frame2, text="Odśwież", command=self._odswiez_instalowane).pack(side="left", padx=4)
-        ctk.CTkButton(btn_frame2, text="Odinstaluj", fg_color="#3a1a1a", command=self._odinstaluj).pack(side="left", padx=4)
+        self._installed_frame = ctk.CTkScrollableFrame(tab, corner_radius=4)
+        self._installed_frame.pack(fill="both", expand=True, padx=6, pady=2)
+
+        bottom = ctk.CTkFrame(tab, height=36)
+        bottom.pack(fill="x", padx=6, pady=6)
+        bottom.pack_propagate(False)
+        ctk.CTkButton(bottom, text="Odśwież", command=self._odswiez_instalowane).pack(side="left", padx=4)
+        ctk.CTkButton(bottom, text="Odinstaluj", fg_color="#3a1a1a", command=self._odinstaluj).pack(side="left", padx=4)
 
         self._odswiez_instalowane()
 
+    def _czysc_frame(self, frame):
+        for w in frame.winfo_children():
+            w.destroy()
+        ctk.CTkLabel(frame, text="", font=ctk.CTkFont(size=8)).pack()
+
     def _szukaj(self):
         q = self._search_en.get().strip()
-        if not q: return
-        self._results_text.delete("1.0", "end")
-        self._results_text.insert("end", "Szukanie...\n")
+        if not q:
+            return
+        self._czysc_frame(self._results_frame)
+        self._selected_pkg = None
         self._zainstaluj_btn.configure(state="disabled")
-        self._wyniki = []
+        ctk.CTkLabel(self._results_frame, text="Szukanie...", font=ctk.CTkFont(size=11)).pack(pady=10)
         threading.Thread(target=self._szukaj_watek, args=(q,), daemon=True).start()
 
     def _szukaj_watek(self, q):
         try:
             from urllib.request import urlopen, Request
+            # PyPI JSON search API
             url = f"https://pypi.org/simple/{q}/"
-            req = Request(url, headers={"User-Agent": "VEXLang/2.0"})
-            resp = urlopen(req, timeout=8)
+            req = Request(url, headers={"User-Agent": "VEXLang/2.1"})
+            resp = urlopen(req, timeout=10)
             html = resp.read().decode()
-            self._wyniki = []
+            names = []
             for m in re.finditer(r'<a[^>]*href="[^"]*"[^>]*>([^<]+)</a>', html):
                 name = m.group(1).strip()
                 if q.lower() in name.lower():
-                    self._wyniki.append(name)
-            self._wyniki = self._wyniki[:50]
+                    names.append(name)
+            self._wyniki = names[:60]
             self.after(0, self._pokaz_wyniki)
         except Exception as e:
-            self.after(0, lambda: self._results_text.delete("1.0", "end"))
-            self.after(0, lambda: self._results_text.insert("end", f"Błąd: {e}\n\nSprawdź połączenie z internetem."))
+            self.after(0, lambda: self._czysc_frame(self._results_frame))
+            self.after(0, lambda: ctk.CTkLabel(
+                self._results_frame, text=f"Błąd: {e}\nSprawdź połączenie.",
+                font=ctk.CTkFont(size=11), text_color="#ef4444").pack(pady=10))
 
     def _pokaz_wyniki(self):
-        self._results_text.delete("1.0", "end")
+        self._czysc_frame(self._results_frame)
         if not self._wyniki:
-            self._results_text.insert("end", "Brak wyników.\n")
+            ctk.CTkLabel(self._results_frame, text="Brak wyników.",
+                         font=ctk.CTkFont(size=11)).pack(pady=10)
             return
-        for i, name in enumerate(self._wyniki):
-            self._results_text.insert("end", f"{name}\n")
-            self._results_text._textbox.tag_add(f"pkg_{i}", f"{i+1}.0", f"{i+1}.{len(name)}")
-            self._results_text._textbox.tag_config(f"pkg_{i}", foreground="#40bfff", cursor="hand2")
-            self._results_text._textbox.tag_bind(f"pkg_{i}", "<Button-1>", lambda e, n=name: self._wybierz_pakiet(n))
-        self._results_text.insert("end", "\n(Kliknij pakiet aby wybrać, potem Zainstaluj)")
+        for name in self._wyniki:
+            btn = ctk.CTkButton(
+                self._results_frame, text=name,
+                font=ctk.CTkFont(size=11),
+                fg_color="#141726", hover_color="#1e2240",
+                anchor="w", height=26,
+                command=lambda n=name: self._wybierz_pakiet(n)
+            )
+            btn.pack(fill="x", padx=4, pady=1)
 
     def _wybierz_pakiet(self, name):
         self._selected_pkg = name
         self._zainstaluj_btn.configure(state="normal", text=f"Zainstaluj {name}")
 
     def _zainstaluj(self):
-        if not hasattr(self, '_selected_pkg') or not self._selected_pkg: return
+        if not self._selected_pkg:
+            return
         name = self._selected_pkg
-        self._results_text.insert("end", f"\nInstalowanie {name}...\n")
+        info = ctk.CTkLabel(self._results_frame, text=f"Instalowanie {name}...",
+                            font=ctk.CTkFont(size=10), text_color="#ffa640")
+        info.pack(pady=4)
         self._zainstaluj_btn.configure(state="disabled", text="Instalowanie...")
         threading.Thread(target=self._instaluj_watek, args=(name,), daemon=True).start()
 
     def _instaluj_watek(self, name):
         py = self.parent._python_cmd.get()
         try:
-            r = subprocess.run([py, "-m", "pip", "install", name], capture_output=True, text=True, timeout=120)
+            r = subprocess.run([py, "-m", "pip", "install", name],
+                               capture_output=True, text=True, timeout=120)
             out = r.stdout + r.stderr
-            self.after(0, lambda: self._results_text.insert("end", out + "\n"))
-            if "Successfully installed" in out or "already satisfied" in out:
-                self.after(0, lambda: self._results_text.insert("end", "✔ Gotowe!\n"))
-                self.after(0, self._odswiez_instalowane)
-            else:
-                self.after(0, lambda: self._results_text.insert("end", "❌ Błąd instalacji\n"))
+            ok = "Successfully installed" in out or "already satisfied" in out
+            self.after(0, lambda: ctk.CTkLabel(
+                self._results_frame,
+                text="✔ Gotowe!" if ok else f"❌ Błąd\n{out[:300]}",
+                font=ctk.CTkFont(size=10),
+                text_color="#00ffa3" if ok else "#ef4444"
+            ).pack(pady=2))
+            if ok:
+                self.after(500, self._odswiez_instalowane)
         except Exception as e:
-            self.after(0, lambda: self._results_text.insert("end", f"Błąd: {e}\n"))
-        self.after(0, lambda: self._zainstaluj_btn.configure(state="normal", text="Zainstaluj"))
+            self.after(0, lambda: ctk.CTkLabel(
+                self._results_frame, text=f"Błąd: {e}",
+                font=ctk.CTkFont(size=10), text_color="#ef4444"
+            ).pack(pady=2))
+        self.after(0, lambda: self._zainstaluj_btn.configure(state="disabled", text="Zainstaluj"))
 
     def _odswiez_instalowane(self):
-        self._installed_text.delete("1.0", "end")
-        self._installed_text.insert("end", "Ładowanie...\n")
+        self._czysc_frame(self._installed_frame)
+        self._selected_inst = None
+        ctk.CTkLabel(self._installed_frame, text="Ładowanie...",
+                     font=ctk.CTkFont(size=11)).pack(pady=10)
         threading.Thread(target=self._odswiez_watek, daemon=True).start()
 
     def _odswiez_watek(self):
         py = self.parent._python_cmd.get()
         try:
-            r = subprocess.run([py, "-m", "pip", "list", "--format=columns"], capture_output=True, text=True, timeout=30)
+            r = subprocess.run([py, "-m", "pip", "list", "--format=columns"],
+                               capture_output=True, text=True, timeout=30)
             lines = r.stdout.strip().split("\n")
-            self._instalowane = []
+            pkgs = []
             started = False
             for line in lines:
-                if "-------" in line: started = True; continue
+                if "-------" in line:
+                    started = True
+                    continue
                 if started and line.strip():
                     parts = line.split()
-                    if len(parts) >= 2: self._instalowane.append((parts[0], parts[1]))
+                    if len(parts) >= 2:
+                        pkgs.append((parts[0], parts[1]))
+            self._instalowane = pkgs
             self.after(0, self._pokaz_instalowane)
         except Exception as e:
-            self.after(0, lambda: self._installed_text.delete("1.0", "end"))
-            self.after(0, lambda: self._installed_text.insert("end", f"Błąd: {e}\n"))
+            self.after(0, lambda: self._czysc_frame(self._installed_frame))
+            self.after(0, lambda: ctk.CTkLabel(
+                self._installed_frame, text=f"Błąd: {e}",
+                font=ctk.CTkFont(size=11), text_color="#ef4444"
+            ).pack(pady=10))
 
     def _pokaz_instalowane(self):
-        self._installed_text.delete("1.0", "end")
+        self._czysc_frame(self._installed_frame)
         if not self._instalowane:
-            self._installed_text.insert("end", "Brak zainstalowanych pakietów.\n")
+            ctk.CTkLabel(self._installed_frame, text="Brak pakietów.",
+                         font=ctk.CTkFont(size=11)).pack(pady=10)
             return
-        for i, (name, ver) in enumerate(self._instalowane):
-            self._installed_text.insert("end", f"{name}  ({ver})\n")
-            self._installed_text._textbox.tag_add(f"inst_{i}", f"{i+1}.0", f"{i+1}.{len(name)}")
-            self._installed_text._textbox.tag_config(f"inst_{i}", foreground="#40bfff", cursor="hand2")
-            self._installed_text._textbox.tag_bind(f"inst_{i}", "<Button-1>", lambda e, n=name: self._wybierz_instalowany(n))
+        for name, ver in self._instalowane:
+            f = ctk.CTkFrame(self._installed_frame, fg_color="transparent")
+            f.pack(fill="x", padx=4, pady=1)
+            btn = ctk.CTkButton(
+                f, text=f"{name}  ({ver})",
+                font=ctk.CTkFont(size=11),
+                fg_color="#141726", hover_color="#1e2240",
+                anchor="w", height=26,
+                command=lambda n=name: self._wybierz_instalowany(n)
+            )
+            btn.pack(fill="x")
 
     def _wybierz_instalowany(self, name):
-        self._selected_installed = name
+        self._selected_inst = name
 
     def _odinstaluj(self):
-        if not hasattr(self, '_selected_installed') or not self._selected_installed: return
-        name = self._selected_installed
+        if not self._selected_inst:
+            return
+        name = self._selected_inst
         from tkinter import messagebox as _mb
-        if not _mb.askyesno("Odinstaluj", f"Usunąć {name}?"): return
-        self._installed_text.insert("end", f"\nOdinstalowywanie {name}...\n")
+        if not _mb.askyesno("Odinstaluj", f"Usunąć {name}?"):
+            return
+        ctk.CTkLabel(self._installed_frame, text=f"Odinstalowywanie {name}...",
+                     font=ctk.CTkFont(size=10), text_color="#ffa640").pack(pady=2)
         threading.Thread(target=self._odinstaluj_watek, args=(name,), daemon=True).start()
 
     def _odinstaluj_watek(self, name):
         py = self.parent._python_cmd.get()
         try:
-            r = subprocess.run([py, "-m", "pip", "uninstall", name, "-y"], capture_output=True, text=True, timeout=60)
+            r = subprocess.run([py, "-m", "pip", "uninstall", name, "-y"],
+                               capture_output=True, text=True, timeout=60)
             out = r.stdout + r.stderr
-            self.after(0, lambda: self._installed_text.insert("end", out + "\n"))
-            self.after(0, self._odswiez_instalowane)
+            ok = "Successfully uninstalled" in out
+            self.after(0, lambda: ctk.CTkLabel(
+                self._installed_frame,
+                text="✔ Usunięto!" if ok else f"❌ {out[:200]}",
+                font=ctk.CTkFont(size=10),
+                text_color="#00ffa3" if ok else "#ef4444"
+            ).pack(pady=2))
+            if ok:
+                self.after(500, self._odswiez_instalowane)
         except Exception as e:
-            self.after(0, lambda: self._installed_text.insert("end", f"Błąd: {e}\n"))
+            self.after(0, lambda: ctk.CTkLabel(
+                self._installed_frame, text=f"Błąd: {e}",
+                font=ctk.CTkFont(size=10), text_color="#ef4444"
+            ).pack(pady=2))
 
 
 if __name__ == "__main__":
