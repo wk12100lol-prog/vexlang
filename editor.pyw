@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-import sys, os, io, json, threading, zipfile, re, time, subprocess
+import sys, os, json, threading, zipfile, re, time, subprocess
 import customtkinter as ctk
 from tkinter import filedialog, messagebox
 from urllib.request import urlopen, Request
@@ -29,7 +29,6 @@ class VEXLangEditor(ctk.CTk):
 
         self._filepath = None
         self._modified = False
-        self._exec_thread = None
         self._find_results = []
         self._find_idx = -1
 
@@ -371,113 +370,43 @@ class VEXLangEditor(ctk.CTk):
     # ── RUN ──
 
     def _run(self):
-        if self._exec_thread and self._exec_thread.is_alive():
-            return
         code = self._txt.get("1.0", "end-1c")
         if not code.strip():
             return
-        self._switch_out("OUTPUT")
-        self._out_clear()
-        self._out_write("═══════════════════════\n", "info")
-        self._out_write("  ▶ Uruchamianie...\n", "info")
-        self._out_write("═══════════════════════\n", "info")
-        self._exec_thread = threading.Thread(
-            target=self._exec, args=(code,), daemon=True
-        )
-        self._exec_thread.start()
+        # zapisz do tymczasowego pliku
+        tmp = os.path.join(os.environ.get("TEMP", os.getcwd()), f"vex_{int(time.time()*1000)}.vex")
+        with open(tmp, "w", encoding="utf-8") as f:
+            f.write(code)
+        # otwórz nowe okno cmd i uruchom
+        try:
+            self._proc = subprocess.Popen(
+                ["cmd.exe", "/k", "python", "vexlang.py", tmp],
+                creationflags=subprocess.CREATE_NEW_CONSOLE
+            )
+        except Exception as e:
+            messagebox.showerror("Błąd", str(e))
 
     def _stop(self):
-        if self._exec_thread and self._exec_thread.is_alive():
-            self._exec_thread = None
-            self._out_write("■ Przerwano\n", "err")
-
-    def _exec(self, code):
-        old_out, old_in = sys.stdout, sys.stdin
-        buf = io.StringIO()
-        err = io.StringIO()
-        try:
-            sys.stdout = buf
-            sys.stdin = io.StringIO()
-            interp = Interpreter(kolor_output=True)
-            interp.uruchom(code)
-        except SyntaxError as e:
-            err.write(f"Składnia: {e}\n")
-        except Exception as e:
-            err.write(f"Błąd: {e}\n")
-        finally:
-            sys.stdout = old_out
-            sys.stdin = old_in
-        out = buf.getvalue()
-        e = err.getvalue()
-        self.after(0, lambda: self._show_res(out, e))
-
-    def _show_res(self, out, err):
-        if out:
-            self._switch_out("OUTPUT")
-            self._out_write(out)
-        if err:
-            self._switch_out("BŁĘDY")
-            self._out_write(err, "err")
-        if out and not err:
-            self._out_write("✔ Zakończono\n", "ok")
+        if hasattr(self, '_proc') and self._proc and self._proc.poll() is None:
+            self._proc.kill()
+            self._proc = None
 
     def _repl(self):
-        self._switch_out("REPL")
-        self._out_write("VEXLang REPL — exit aby wyjść\n\n", "info")
-        self._repl_interp = Interpreter(kolor_output=True)
-        threading.Thread(target=self._repl_loop, daemon=True).start()
-
-    def _repl_loop(self):
-        while True:
-            inp = self._repl_input(">>> ")
-            if inp is None or inp.strip().lower() == "exit":
-                self._out_write("Bye!\n", "info")
-                break
-            try:
-                self._repl_interp.uruchom(inp)
-            except Exception as e:
-                self.after(0, self._out_write, f"Błąd: {e}\n", "err")
-
-    def _repl_input(self, prompt):
-        res = []
-        ev = threading.Event()
-        self.after(0, self._show_repl_inp, prompt, res, ev)
-        ev.wait()
-        return res[0] if res else None
-
-    def _show_repl_inp(self, prompt, res, ev):
-        dlg = ctk.CTkToplevel(self)
-        dlg.title("VEXLang Input")
-        dlg.geometry("360x110")
-        dlg.transient(self)
-        dlg.grab_set()
-        f = ctk.CTkFrame(dlg)
-        f.pack(fill="both", expand=True, padx=16, pady=12)
-        ctk.CTkLabel(f, text=prompt, font=ctk.CTkFont(size=12)).pack(anchor="w")
-        ent = ctk.CTkEntry(f)
-        ent.pack(fill="x", pady=8)
-        ent.focus()
-
-        def ok():
-            res.append(ent.get())
-            ev.set()
-            dlg.destroy()
-
-        ent.bind("<Return>", lambda e: ok())
-        ctk.CTkButton(f, text="OK", command=ok).pack()
+        try:
+            subprocess.Popen(
+                ["cmd.exe", "/k", "python", "vexlang.py"],
+                creationflags=subprocess.CREATE_NEW_CONSOLE
+            )
+        except Exception as e:
+            messagebox.showerror("Błąd", str(e))
 
     def _out_write(self, text, tag=None):
         self._out.configure(state="normal")
         if tag:
             self._out.insert("end", text, f"out_{tag}")
         else:
-            # parse ANSI escape codes
-            import re as _re
-            parts = _re.split(r'(\033\[\d+m)', text)
-            for p in parts:
-                if p.startswith('\033[') and p.endswith('m'):
-                    continue  # skip ANSI codes
-                self._out.insert("end", p)
+            text = re.sub('\x1b\\[\\d+m', '', text)
+            self._out.insert("end", text)
         self._out.see("end")
         self._out.configure(state="disabled")
 
