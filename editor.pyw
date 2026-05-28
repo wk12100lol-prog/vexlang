@@ -7,7 +7,7 @@ from urllib.request import urlopen, Request
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from vexlang import Lexer, Parser, Interpreter, SLOWA_KLUCZOWE, KOLORY_ANSI, KOLORY_HEX
 
-VERSION = "2.4.0"
+VERSION = "2.4.1"
 GITHUB_REPO = "wk12100lol-prog/vexlang"
 
 try:
@@ -672,6 +672,17 @@ def _is_num(s):
         return True
     except:
         return False
+
+
+def _nazwa_z_pliku(filename):
+    """Wyciaga nazwe projektu z nazwy pliku (np. 'ctk-0.1.zip' → 'ctk')."""
+    m = re.match(r'^(.+?)-\d', filename)
+    return m.group(1) if m else filename
+    try:
+        float(s)
+        return True
+    except:
+        return False
 class BibliotekiWindow(ctk.CTkToplevel):
     def __init__(self, parent):
         super().__init__(parent)
@@ -750,26 +761,26 @@ class BibliotekiWindow(ctk.CTkToplevel):
     def _szukaj_watek(self, q):
         try:
             from urllib.request import urlopen, Request
-            url = f"https://pypi.org/simple/{q}/"
-            req = Request(url, headers={"User-Agent": "VEXLang/2.3"})
-            resp = urlopen(req, timeout=10)
-            html = resp.read().decode()
             names = []
-            for m in re.finditer(r'<a[^>]*href="[^"]*"[^>]*>([^<]+)</a>', html):
-                name = m.group(1).strip()
-                if q.lower() in name.lower():
-                    names.append(name)
-            names = names[:40]
+            # proba 1: Simple API JSON (daje nazwe projektu)
+            url = f"https://pypi.org/simple/{q}/"
+            req = Request(url, headers={
+                "Accept": "application/vnd.pypi.simple.v1+json",
+                "User-Agent": "VEXLang/2.4",
+            })
+            resp = urlopen(req, timeout=10)
+            data = json.loads(resp.read().decode())
+            names = [data.get("name", q)]
 
-            # sprawdz Windows-kompatybilność dla kazdej (wielowatkowo)
+            # sprawdz Windows-kompatybilność (wielowatkowo)
             win_set = set()
             with concurrent.futures.ThreadPoolExecutor(max_workers=10) as ex:
                 fut = {ex.submit(self._fetch_pypi_json, n): n for n in names}
                 for f in concurrent.futures.as_completed(fut):
                     n = fut[f]
                     try:
-                        data = f.result()
-                        if data and _pypi_wspiera_windows(data):
+                        d = f.result()
+                        if d and _pypi_wspiera_windows(d):
                             win_set.add(n)
                     except:
                         pass
