@@ -7,7 +7,7 @@ from urllib.request import urlopen, Request
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from vexlang import Lexer, Parser, Interpreter, SLOWA_KLUCZOWE
 
-VERSION = "1.2.0"
+VERSION = "1.2.1"
 GITHUB_REPO = "wk12100lol-prog/vexlang"
 
 try:
@@ -43,18 +43,38 @@ class VEXLangEditor(ctk.CTk):
     # ── UI ──
 
     def _build_ui(self):
-        # header
-        hdr = ctk.CTkFrame(self, height=44, corner_radius=0)
+        # header toolbar
+        hdr = ctk.CTkFrame(self, height=40, corner_radius=0)
         hdr.pack(fill="x")
         hdr.pack_propagate(False)
 
-        ctk.CTkLabel(hdr, text="VEXLang", font=ctk.CTkFont(size=16, weight="bold"),
-                     text_color="#ff6b9d").pack(side="left", padx=16)
+        ctk.CTkLabel(hdr, text="VEXLang", font=ctk.CTkFont(size=15, weight="bold"),
+                     text_color="#ff6b9d").pack(side="left", padx=14)
 
-        tb = ctk.CTkFrame(hdr, fg_color="transparent")
-        tb.pack(side="left", padx=8)
-        for t, cmd in [("▶", self._run), ("■", self._stop)]:
-            ctk.CTkButton(tb, text=t, width=36, command=cmd).pack(side="left", padx=1)
+        sep = lambda: ctk.CTkFrame(hdr, width=1, height=18, fg_color="#2a2d45").pack(side="left", padx=4)
+
+        btns = [
+            ("📄 Nowy", self._new), ("📂 Otwórz", self._open), ("💾 Zapisz", self._save),
+        ]
+        for t, cmd in btns:
+            ctk.CTkButton(hdr, text=t, width=42, height=24, font=ctk.CTkFont(size=9),
+                          corner_radius=4, command=cmd).pack(side="left", padx=2)
+        sep()
+
+        btns2 = [("▶ Uruchom", self._run), ("■ Zatrzymaj", self._stop)]
+        for t, cmd in btns2:
+            ctk.CTkButton(hdr, text=t, width=40, height=24, font=ctk.CTkFont(size=9),
+                          corner_radius=4, fg_color="#1e3a2a" if "chomaj" not in t else "#3a1a1a",
+                          command=cmd).pack(side="left", padx=2)
+        sep()
+
+        ctk.CTkButton(hdr, text="💻 REPL", width=36, height=24, font=ctk.CTkFont(size=9),
+                      corner_radius=4, fg_color="#1a2a3a", command=self._repl).pack(side="left", padx=2)
+        ctk.CTkButton(hdr, text="🔍 Szukaj", width=40, height=24, font=ctk.CTkFont(size=9),
+                      corner_radius=4, fg_color="#2a1a3a", command=self._toggle_find).pack(side="left", padx=2)
+        sep()
+        ctk.CTkButton(hdr, text="⬇ Aktualizacje", width=38, height=24, font=ctk.CTkFont(size=9),
+                      corner_radius=4, fg_color="#2a2a1a", command=self._check_update_now).pack(side="left", padx=2)
 
         self._upd_lbl = ctk.CTkLabel(hdr, text="", font=ctk.CTkFont(size=9))
         self._upd_lbl.pack(side="right", padx=12)
@@ -456,6 +476,10 @@ class VEXLangEditor(ctk.CTk):
 
     def _check_update(self):
         threading.Thread(target=self._update_thread, daemon=True).start()
+
+    def _check_update_now(self):
+        self._upd_lbl.configure(text="Sprawdzanie...")
+        self.after(100, self._check_update)
 
     def _update_thread(self):
         try:
