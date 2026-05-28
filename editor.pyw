@@ -7,7 +7,7 @@ from urllib.request import urlopen, Request
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from vexlang import Lexer, Parser, Interpreter, SLOWA_KLUCZOWE, KOLORY_ANSI, KOLORY_HEX
 
-VERSION = "2.3.0"
+VERSION = "2.3.1"
 GITHUB_REPO = "wk12100lol-prog/vexlang"
 
 try:
@@ -776,7 +776,8 @@ class BibliotekiWindow(ctk.CTkToplevel):
         py = self.parent._python_cmd.get()
         try:
             r = subprocess.run([py, "-m", "pip", "install", name],
-                               capture_output=True, text=True, timeout=120)
+                               capture_output=True, text=True, timeout=120,
+                               creationflags=subprocess.CREATE_NO_WINDOW)
             out = r.stdout + r.stderr
             ok = "Successfully installed" in out or "already satisfied" in out
             self.after(0, lambda: ctk.CTkLabel(
@@ -805,7 +806,8 @@ class BibliotekiWindow(ctk.CTkToplevel):
         py = self.parent._python_cmd.get()
         try:
             r = subprocess.run([py, "-m", "pip", "list", "--format=columns"],
-                               capture_output=True, text=True, timeout=30)
+                               capture_output=True, text=True, timeout=30,
+                               creationflags=subprocess.CREATE_NO_WINDOW)
             lines = r.stdout.strip().split("\n")
             pkgs = []
             started = False
@@ -862,7 +864,8 @@ class BibliotekiWindow(ctk.CTkToplevel):
         py = self.parent._python_cmd.get()
         try:
             r = subprocess.run([py, "-m", "pip", "uninstall", name, "-y"],
-                               capture_output=True, text=True, timeout=60)
+                               capture_output=True, text=True, timeout=60,
+                               creationflags=subprocess.CREATE_NO_WINDOW)
             out = r.stdout + r.stderr
             ok = "Successfully uninstalled" in out
             self.after(0, lambda: ctk.CTkLabel(
