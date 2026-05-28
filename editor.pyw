@@ -438,6 +438,8 @@ class VEXLangEditor(ctk.CTk):
     def _check_update_now(self):
         self._upd_lbl.configure(text="Sprawdzanie...")
         self.after(100, self._check_update)
+        # zresetuj label po 10s jesli nic sie nie stalo
+        self.after(10000, lambda: self._upd_lbl.configure(text=""))
 
     def _update_thread(self):
         try:
@@ -450,8 +452,10 @@ class VEXLangEditor(ctk.CTk):
             cur = VERSION.lstrip("v")
             if self._cmp(tag, cur) > 0:
                 self.after(0, self._show_upd, tag, data.get("body", ""))
-        except:
-            pass
+            else:
+                self.after(0, lambda: self._upd_lbl.configure(text="Najnowsza"))
+        except Exception as e:
+            self.after(0, lambda: self._upd_lbl.configure(text=f"Błąd: {str(e)[:20]}"))
 
     def _cmp(self, a, b):
         pa = [int(x) for x in a.split(".")]
@@ -476,7 +480,7 @@ class VEXLangEditor(ctk.CTk):
                 f"https://api.github.com/repos/{GITHUB_REPO}/releases/tags/v{tag}",
                 headers={"User-Agent": "VEXLang"},
             )
-            data = json.loads(urlopen(req, timeout=8).read().decode())
+            data = json.loads(urlopen(req, timeout=10).read().decode())
             zu = None
             for a in data.get("assets", []):
                 if a["name"].endswith(".zip"):
@@ -485,14 +489,30 @@ class VEXLangEditor(ctk.CTk):
             if not zu:
                 zu = data.get("zipball_url")
             if not zu:
-                raise Exception("Brak URL")
-            resp = urlopen(Request(zu, headers={"User-Agent": "VEXLang"}), timeout=30)
-            d = resp.read()
-            base = os.path.dirname(os.path.abspath(__file__))
+                raise Exception("Brak URL do pobrania")
 
+            # pobierz ZIP do pliku tymczasowego (zanim cokolwiek skasujemy)
+            import tempfile
+            tmp = tempfile.NamedTemporaryFile(delete=False, suffix=".zip")
+            tmp_name = tmp.name
+            try:
+                resp = urlopen(Request(zu, headers={"User-Agent": "VEXLang"}), timeout=60)
+                tmp.write(resp.read())
+                tmp.close()
+                if not zipfile.is_zipfile(tmp_name):
+                    raise Exception("Pobrany plik nie jest poprawnym ZIP")
+            except Exception as e:
+                os.unlink(tmp_name)
+                raise Exception(f"Nie udało się pobrać: {e}")
+
+            # usun stare pliki (oprócz .git, __pycache__ i siebie)
+            base = os.path.dirname(os.path.abspath(__file__))
+            myself = os.path.basename(__file__)
             for root, dirs, files in os.walk(base, topdown=True):
                 dirs[:] = [d for d in dirs if d not in (".git", "__pycache__")]
                 for f in files:
+                    if f == myself:
+                        continue
                     fp = os.path.join(root, f)
                     try:
                         os.remove(fp)
@@ -506,25 +526,30 @@ class VEXLangEditor(ctk.CTk):
                     except:
                         pass
 
-            with zipfile.ZipFile(io.BytesIO(d)) as z:
+            # rozpakuj (obsluga Windowsowych backslashy w zipie)
+            with zipfile.ZipFile(tmp_name) as z:
                 names = z.namelist()
                 roots = set()
                 for n in names:
-                    p = n.split("/")
+                    p = n.replace("\\", "/").split("/")
                     if len(p) > 1 and p[0]:
                         roots.add(p[0])
                 skip = len(roots) == 1
                 for name in names:
-                    parts = name.split("/")[1:] if skip else name.split("/")
+                    parts = name.replace("\\", "/").split("/")
+                    if skip and len(parts) > 1:
+                        parts = parts[1:]
                     if not parts:
                         continue
                     target = os.path.join(base, *parts)
-                    if name.endswith("/"):
+                    if name.endswith("/") or name.endswith("\\"):
                         os.makedirs(target, exist_ok=True)
                     else:
                         os.makedirs(os.path.dirname(target), exist_ok=True)
                         with open(target, "wb") as f:
                             f.write(z.read(name))
+
+            os.unlink(tmp_name)
             messagebox.showinfo("OK", f"Zaktualizowano do v{tag}. Uruchom ponownie.")
             self.quit()
         except Exception as e:
