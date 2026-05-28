@@ -1,0 +1,109 @@
+# VEXLang v2 - przyklady nowych funkcji
+
+pisz "=== KOLORY ==="
+pisz_kolorowo("Czerwony", czerwony)
+pisz_kolorowo("Zielony", zielony)
+pisz_kolorowo("Niebieski", niebieski)
+pisz_kolorowo("Fioletowy", fioletowy)
+pisz_kolorowo("Zolty", zolty)
+pisz_kolorowo("Cyjan", cyjan)
+pisz_kolorowo("Rozowy", rozowy)
+pisz_kolorowo("Pomaranczowy", pomaranczowy)
+
+pisz ""
+pisz "=== OPERATORY ZLOZONE ==="
+licz x = 10
+x += 5
+pisz "x += 5 -> " + x
+x -= 3
+pisz "x -= 3 -> " + x
+x *= 2
+pisz "x *= 2 -> " + x
+x /= 4
+pisz "x /= 4 -> " + x
+
+pisz ""
+pisz "=== INLINE JESLI ==="
+licz wiek = 20
+tekst status = jesli wiek >= 18 to "dorosly" inaczej "dziecko"
+pisz "Status: " + status
+
+pisz ""
+pisz "=== SLOWNIK ==="
+slownik osoba = slownik("imie" => "Anna", "wiek" => 30, "miasto" => "Krakow")
+pisz osoba["imie"]
+pisz "Klucze:"
+pisz klucze(osoba)
+pisz "Wartosci:"
+pisz wartosci(osoba)
+
+pisz ""
+pisz "=== FUNKCJE MATEMATYCZNE ==="
+pisz "min(5, 2, 8, 1) = " + min(5, 2, 8, 1)
+pisz "max(5, 2, 8) = " + max(5, 2, 8)
+pisz "abs(-10) = " + abs(-10)
+pisz "sqrt(16) = " + sqrt(16)
+pisz "sin(0) = " + sin(0)
+pisz "cos(0) = " + cos(0)
+pisz "flr(3.7) = " + flr(3.7)
+pisz "ceil(3.2) = " + ceil(3.2)
+
+pisz ""
+pisz "=== FUNKCJE STRINGOW ==="
+pisz "wielkie(hello) = " + wielkie("hello")
+pisz "male(HELLO) = " + male("HELLO")
+pisz "zawiera(hello world, world) = " + zawiera("hello world", "world")
+pisz "znajdz(hello world, world) = " + znajdz("hello world", "world")
+pisz "dziel(a,b,c, ,) = " + dziel("a,b,c", ",")
+pisz "laczenie([1, 2, 3], -) = " + laczenie([1, 2, 3], "-")
+pisz "przytnij(  test  ) = " + przytnij("  test  ")
+
+pisz ""
+pisz "=== FUNKCJE TABLIC ==="
+tablica t = [3, 1, 4, 1, 5]
+dodaj(t, 9)
+pisz "po dodaj: " + t
+pisz "suma = " + suma(t)
+pisz "srednia = " + srednia(t)
+pisz "sortuj = " + sortuj(t)
+
+pisz ""
+pisz "=== DATA I CZAS ==="
+pisz "Dzisiaj: " + data()
+pisz "Godzina: " + czas()
+
+pisz ""
+pisz "=== LAMBDA (funkcja jednowyrazeniowa) ==="
+funkcja kwadrat(x) => x * x
+funkcja szescian(x) => x * x * x
+pisz "kwadrat(5) = " + kwadrat(5)
+pisz "szescian(3) = " + szescian(3)
+
+pisz ""
+pisz "=== WYBIERZ ==="
+licz opcja = 2
+wybierz opcja {
+    1 { pisz "Wybrano opcje 1" }
+    2 { pisz "Wybrano opcje 2" }
+    3 { pisz "Wybrano opcje 3" }
+}
+
+pisz ""
+pisz "=== AZ (DO-WHILE) ==="
+licz licznik = 0
+az {
+    pisz "Licznik: " + licznik
+    licznik += 1
+} dopoki licznik < 3
+
+pisz ""
+pisz "=== KOMENTARZE BLOKOWE ==="
+pisz "Przed komentarzem"
+/* to jest
+   komentarz blokowy
+   w wielu liniach */
+pisz "Po komentarzu"
+
+pisz ""
+pisz "=== POJEDYNCZY CUDZYSŁOW ==="
+pisz 'mozna uzywac pojedynczego cudzyslowu tez'

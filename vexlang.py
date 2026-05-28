@@ -1,23 +1,48 @@
 #!/usr/bin/env python3
-import sys, os, re, math, random as _random
+import sys, os, re, math, random as _random, time as _time
 
-VERSION = "1.0.0"
+VERSION = "2.0.0"
+
+# ── ANSI ──
+
+KOLORY_ANSI = {
+    "czerwony": 31, "zielony": 32, "zolty": 33, "niebieski": 34,
+    "fioletowy": 35, "cyjan": 36, "bialy": 37, "rozowy": 95,
+    "pomaranczowy": 93, "szary": 90, "jasny_czerwony": 91,
+    "jasny_zielony": 92, "jasny_niebieski": 94,
+}
+KOLORY_HEX = {
+    "czerwony": "#ef4444", "zielony": "#00ffa3", "zolty": "#ffd700",
+    "niebieski": "#40bfff", "fioletowy": "#a855f7", "cyjan": "#00ffff",
+    "bialy": "#ffffff", "rozowy": "#ff6b9d", "pomaranczowy": "#ffa640",
+    "szary": "#888888", "jasny_czerwony": "#ff6b6b", "jasny_zielony": "#50ffb0",
+    "jasny_niebieski": "#80dfff",
+}
+
+KANONICZNE = {
+    "jesli": "jeśli", "falsz": "fałsz", "zwroc": "zwróć", "dopoki": "dopóki"
+}
 
 # ── LEXER ──
 
 TOKENS = [
+    ("KOMENTARZ_BLOK", r"/\*[\s\S]*?\*/"),
     ("KOMENTARZ", r"#.*"),
     ("SPACJA", r"[ \t]+"),
     ("LICZBA", r"\d+(\.\d+)?"),
     ("TEKST", r'"[^"]*"'),
+    ("TEKST_POJ", r"'[^']*'"),
     ("IDENT", r"[a-ząćęłńóśźżA-Z_][a-ząćęłńóśźżA-Z0-9_]*"),
-    ("DWUKROPEK", r"::"),
+    ("DODAJ_PRZYP", r"\+="),
+    ("ODEJMIJ_PRZYP", r"-="),
+    ("MNOZ_PRZYP", r"\*="),
+    ("DZIEL_PRZYP", r"/="),
     ("ROWNA_S", r"=="),
     ("NIE_ROWNE", r"!="),
     ("MNIEJSZE_R", r"<="),
     ("WIEKSZE_R", r">="),
-    ("PRZYPISANIE", r"="),
     ("STRZALKA", r"=>"),
+    ("PRZYPISANIE", r"="),
     ("WIĘKSZE", r">"),
     ("MNIEJSZE", r"<"),
     ("DODAJ", r"\+"),
@@ -27,6 +52,7 @@ TOKENS = [
     ("POTEGA", r"\^"),
     ("MODULO", r"%"),
     ("PRZECINEK", r","),
+    ("DWUKROPEK", r"::"),
     ("KROPKA", r"\."),
     ("LEWY_NAWIAS", r"\("),
     ("PRAWY_NAWIAS", r"\)"),
@@ -39,10 +65,11 @@ TOKENS = [
 ]
 
 SLOWA_KLUCZOWE = {
-    "licz", "tekst", "logiczna", "prawda", "fałsz", "nic",
-    "jeśli", "to", "inaczej", "dopóki", "dla", "w",
-    "funkcja", "zwróć", "pisz", "czytaj",
-    "lub", "nie", "tablica", "przerwij", "kontynuuj", "zakres",
+    "licz", "tekst", "logiczna", "prawda", "fałsz", "falsz", "nic",
+    "jeśli", "jesli", "to", "inaczej", "dopóki", "dopoki", "dla", "w", "az",
+    "funkcja", "zwróć", "zwroc", "pisz", "pisz_kolorowo", "czytaj", "czysc",
+    "lub", "nie", "i", "tablica", "slownik",
+    "przerwij", "kontynuuj", "zakres", "wybierz", "zakoncz", "czekaj",
 }
 
 
@@ -75,11 +102,14 @@ class Lexer:
                 m = re.compile(wzor).match(self.kod, self.pozycja)
                 if m:
                     tekst = m.group(0)
-                    if nazwa != "SPACJA" and nazwa != "KOMENTARZ":
+                    if nazwa != "SPACJA" and nazwa != "KOMENTARZ" and nazwa != "KOMENTARZ_BLOK":
                         if nazwa == "IDENT" and tekst in SLOWA_KLUCZOWE:
-                            self.tokeny.append(Token(tekst.upper(), tekst, self.linia, self.kolumna))
+                            kan = KANONICZNE.get(tekst, tekst)
+                            self.tokeny.append(Token(kan.upper(), tekst, self.linia, self.kolumna))
                         elif nazwa == "TEKST":
                             self.tokeny.append(Token(nazwa, tekst[1:-1], self.linia, self.kolumna))
+                        elif nazwa == "TEKST_POJ":
+                            self.tokeny.append(Token("TEKST", tekst[1:-1], self.linia, self.kolumna))
                         elif nazwa == "LICZBA":
                             self.tokeny.append(Token(nazwa, float(tekst) if "." in tekst else int(tekst), self.linia, self.kolumna))
                         else:
@@ -282,6 +312,110 @@ class Kontynuuj(AST):
         return "Kontynuuj()"
 
 
+class PiszKolorowo(AST):
+    def __init__(self, wyrazenie, kolor):
+        self.wyrazenie = wyrazenie
+        self.kolor = kolor
+
+    def __repr__(self):
+        return f"PiszKolorowo({self.wyrazenie}, {self.kolor})"
+
+
+class Czysc(AST):
+    def __repr__(self):
+        return "Czysc()"
+
+
+class Czekaj(AST):
+    def __init__(self, wyrazenie):
+        self.wyrazenie = wyrazenie
+
+    def __repr__(self):
+        return f"Czekaj({self.wyrazenie})"
+
+
+class Zakoncz(AST):
+    def __init__(self, wyrazenie=None):
+        self.wyrazenie = wyrazenie
+
+    def __repr__(self):
+        return f"Zakoncz({self.wyrazenie})"
+
+
+class Wybierz(AST):
+    def __init__(self, wyrazenie, przypadki, domyslnie=None):
+        self.wyrazenie = wyrazenie
+        self.przypadki = przypadki
+        self.domyslnie = domyslnie
+
+    def __repr__(self):
+        return f"Wybierz({self.wyrazenie})"
+
+
+class Przypadek(AST):
+    def __init__(self, wartosci, cialo):
+        self.wartosci = wartosci
+        self.cialo = cialo
+
+    def __repr__(self):
+        return f"Przypadek({self.wartosci})"
+
+
+class Az(AST):
+    def __init__(self, cialo, warunek):
+        self.cialo = cialo
+        self.warunek = warunek
+
+    def __repr__(self):
+        return f"Az({self.cialo}, {self.warunek})"
+
+
+class PrzypisanieZlozone(AST):
+    def __init__(self, nazwa, operator, wyrazenie):
+        self.nazwa = nazwa
+        self.operator = operator
+        self.wyrazenie = wyrazenie
+
+    def __repr__(self):
+        return f"PrzypisanieZlozone({self.nazwa} {self.operator}= {self.wyrazenie})"
+
+
+class SlownikLiteral(AST):
+    def __init__(self, pary):
+        self.pary = pary
+
+    def __repr__(self):
+        return f"Slownik({self.pary})"
+
+
+class Para(AST):
+    def __init__(self, klucz, wartosc):
+        self.klucz = klucz
+        self.wartosc = wartosc
+
+    def __repr__(self):
+        return f"Para({self.klucz} => {self.wartosc})"
+
+
+class InlineJesli(AST):
+    def __init__(self, warunek, cialo, inaczej):
+        self.warunek = warunek
+        self.cialo = cialo
+        self.inaczej = inaczej
+
+    def __repr__(self):
+        return f"InlineJesli({self.warunek})"
+
+
+class Lambda(AST):
+    def __init__(self, parametry, cialo):
+        self.parametry = parametry
+        self.cialo = cialo
+
+    def __repr__(self):
+        return f"Lambda({self.parametry})"
+
+
 class Parser:
     def __init__(self, tokeny):
         self.tokeny = tokeny
@@ -321,36 +455,51 @@ class Parser:
         return prog
 
     def deklaracja(self):
-        # pomiń nowe linie i średniki
         self.pomija_nowe_linie()
 
-        if self.biezacy().typ in ("LICZ", "TEKST", "LOGICZNA", "TABLICA"):
+        if self.biezacy().typ in ("LICZ", "TEKST", "LOGICZNA", "TABLICA", "SLOWNIK"):
             return self.deklaracja_zmiennej()
         if self.biezacy().typ == "IDENT" and self.nastepny().typ == "PRZYPISANIE":
             nazwa = self.spozywaj("IDENT").wartosc
             self.spozywaj("PRZYPISANIE")
             return Przypisanie(nazwa, self.wyrazenie())
         if self.biezacy().typ == "IDENT" and self.nastepny().typ == "LEWY_KWADRAT":
-            # może być przypisanie indeksowane: tab[j] = ...
-            idx_expr = self.wyrazenie()  # parse tab[j] as Indeksowanie
+            idx_expr = self.wyrazenie()
             if self.sprawdz("PRZYPISANIE"):
                 self.spozywaj()
                 return Przypisanie(idx_expr, self.wyrazenie())
             return idx_expr
+        if self.biezacy().typ == "IDENT" and self.nastepny().typ in ("DODAJ_PRZYP", "ODEJMIJ_PRZYP", "MNOZ_PRZYP", "DZIEL_PRZYP"):
+            nazwa = self.spozywaj("IDENT").wartosc
+            op = self.spozywaj().wartosc  # +=, -=, *=, /=
+            return PrzypisanieZlozone(nazwa, op, self.wyrazenie())
         if self.biezacy().typ == "FUNKCJA":
             return self.deklaracja_funkcji()
         if self.biezacy().typ == "JEŚLI":
             return self.instrukcja_jesli()
         if self.biezacy().typ == "DOPÓKI":
             return self.instrukcja_dopoki()
+        if self.biezacy().typ == "AZ":
+            return self.instrukcja_az()
         if self.biezacy().typ == "DLA":
             return self.instrukcja_dla()
+        if self.biezacy().typ == "WYBIERZ":
+            return self.instrukcja_wybierz()
         if self.biezacy().typ == "PISZ":
             return self.instrukcja_pisz()
+        if self.biezacy().typ == "PISZ_KOLOROWO":
+            return self.instrukcja_pisz_kolorowo()
         if self.biezacy().typ == "ZWRÓĆ":
             return self.instrukcja_zwroc()
         if self.biezacy().typ == "CZYTAJ":
             return self.instrukcja_czytaj()
+        if self.biezacy().typ == "CZYSC":
+            self.spozywaj("CZYSC"); self.spozywaj("LEWY_NAWIAS"); self.spozywaj("PRAWY_NAWIAS")
+            return Czysc()
+        if self.biezacy().typ == "CZEKAJ":
+            return self.instrukcja_czekaj()
+        if self.biezacy().typ == "ZAKONCZ":
+            return self.instrukcja_zakoncz()
         if self.biezacy().typ == "PRZERWIJ":
             self.spozywaj("PRZERWIJ"); return Przerwij()
         if self.biezacy().typ == "KONTYNUUJ":
@@ -359,7 +508,6 @@ class Parser:
             self.spozywaj("NOWA_LINIA"); return None
         if self.biezacy().typ == "EOF":
             return None
-        # może być wywołanie funkcji jako instrukcja
         if self.biezacy().typ == "IDENT" and self.nastepny().typ == "LEWY_NAWIAS":
             return self.wyrazenie()
         if self.biezacy().typ == "IDENT" and self.nastepny().typ == "LEWY_KWADRAT":
@@ -397,6 +545,11 @@ class Parser:
         self.pomija_nowe_linie()
         self.spozywaj("PRAWY_NAWIAS")
         self.pomija_nowe_linie()
+        if self.sprawdz("STRZALKA"):
+            self.spozywaj()
+            cialo = Blok()
+            cialo.instrukcje = [Zwroc(self.wyrazenie())]
+            return DeklaracjaFunkcji(nazwa, parametry, cialo)
         self.spozywaj("LEWY_KLAMRA")
         cialo = self.blok_po_klamrze()
         return DeklaracjaFunkcji(nazwa, parametry, cialo)
@@ -476,6 +629,81 @@ class Parser:
         self.spozywaj("PRAWY_NAWIAS")
         return Czytaj()
 
+    def instrukcja_pisz_kolorowo(self):
+        self.spozywaj("PISZ_KOLOROWO")
+        self.spozywaj("LEWY_NAWIAS")
+        arg = self.wyrazenie()
+        self.pomija_nowe_linie()
+        self.spozywaj("PRZECINEK")
+        self.pomija_nowe_linie()
+        kolor = self.spozywaj()
+        if kolor.typ == "IDENT":
+            kolor_w = kolor.wartosc
+        elif kolor.typ == "TEKST":
+            kolor_w = kolor.wartosc
+        else:
+            self.blad("Oczekiwano nazwy koloru")
+        self.spozywaj("PRAWY_NAWIAS")
+        return PiszKolorowo(arg, kolor_w)
+
+    def instrukcja_czekaj(self):
+        self.spozywaj("CZEKAJ")
+        self.spozywaj("LEWY_NAWIAS")
+        arg = self.wyrazenie()
+        self.spozywaj("PRAWY_NAWIAS")
+        return Czekaj(arg)
+
+    def instrukcja_zakoncz(self):
+        self.spozywaj("ZAKONCZ")
+        self.spozywaj("LEWY_NAWIAS")
+        arg = None
+        if not self.sprawdz("PRAWY_NAWIAS"):
+            arg = self.wyrazenie()
+        self.spozywaj("PRAWY_NAWIAS")
+        return Zakoncz(arg)
+
+    def instrukcja_az(self):
+        self.spozywaj("AZ")
+        self.pomija_nowe_linie()
+        cialo = self.blok()
+        self.pomija_nowe_linie()
+        if self.sprawdz("DOPÓKI"):
+            self.spozywaj("DOPÓKI")
+        self.pomija_nowe_linie()
+        warunek = self.wyrazenie()
+        return Az(cialo, warunek)
+
+    def instrukcja_wybierz(self):
+        self.spozywaj("WYBIERZ")
+        self.pomija_nowe_linie()
+        expr = self.wyrazenie()
+        self.pomija_nowe_linie()
+        self.spozywaj("LEWY_KLAMRA")
+        przypadki = []
+        domyslnie = None
+        while not self.sprawdz("PRAWY_KLAMRA") and not self.sprawdz("EOF"):
+            self.pomija_nowe_linie()
+            if self.sprawdz("PRAWY_KLAMRA"):
+                break
+            if self.sprawdz("INACZEJ"):
+                self.spozywaj()
+                self.pomija_nowe_linie()
+                domyslnie = self.blok_po_klamrze() if self.sprawdz("LEWY_KLAMRA") else Blok()  # shouldn't reach
+                # Actually collect statements until }
+                continue
+            # przypadki: lista wartości oddzielonych przecinkami, potem blok
+            wartosci = [self.wyrazenie()]
+            while self.sprawdz("PRZECINEK"):
+                self.spozywaj()
+                self.pomija_nowe_linie()
+                wartosci.append(self.wyrazenie())
+                self.pomija_nowe_linie()
+            self.pomija_nowe_linie()
+            cialo = self.blok()
+            przypadki.append(Przypadek(wartosci, cialo))
+        self.spozywaj("PRAWY_KLAMRA")
+        return Wybierz(expr, przypadki, domyslnie)
+
     # ── wyrazenia ──
 
     def wyrazenie(self):
@@ -483,14 +711,14 @@ class Parser:
 
     def wyrazenie_logiczne(self):
         lewy = self.wyrazenie_porownania()
-        while (self.sprawdz("I") or self.sprawdz("LUB") or
-               (self.sprawdz("IDENT") and self.biezacy().wartosc == "i")):
+        while self.sprawdz("I") or self.sprawdz("LUB") or (self.sprawdz("IDENT") and self.biezacy().wartosc == "i"):
             if self.sprawdz("IDENT"):
                 self.spozywaj()
                 op = "i"
             else:
                 op = self.spozywaj().wartosc
-            lewy = OperatorBinarny(lewy, op, self.wyrazenie_porownania())
+            prawy = self.wyrazenie_porownania()
+            lewy = OperatorBinarny(lewy, op, prawy)
         return lewy
 
     def wyrazenie_porownania(self):
@@ -554,6 +782,23 @@ class Parser:
                 el.append(self.wyrazenie())
             self.spozywaj("PRAWY_NAWIAS")
             return TablicaLiteral(el)
+        if tok.typ == "SLOWNIK":
+            self.spozywaj()
+            self.spozywaj("LEWY_NAWIAS")
+            pary = []
+            while not self.sprawdz("PRAWY_NAWIAS"):
+                if pary:
+                    self.spozywaj("PRZECINEK")
+                klucz = self.wyrazenie()
+                self.pomija_nowe_linie()
+                if not self.sprawdz("STRZALKA"):
+                    self.blad("Oczekiwano => w slowniku")
+                self.spozywaj("STRZALKA")
+                self.pomija_nowe_linie()
+                wart = self.wyrazenie()
+                pary.append(Para(klucz, wart))
+            self.spozywaj("PRAWY_NAWIAS")
+            return SlownikLiteral(pary)
         if tok.typ == "LEWY_KWADRAT":
             self.spozywaj()
             el = []
@@ -576,6 +821,24 @@ class Parser:
             koniec = self.wyrazenie()
             self.spozywaj("PRAWY_NAWIAS")
             return Zakres(start, koniec)
+        if tok.typ == "FUNKCJA":
+            return self.parse_lambda()
+        if tok.typ == "JEŚLI":
+            self.spozywaj()
+            self.pomija_nowe_linie()
+            warunek = self.wyrazenie()
+            self.pomija_nowe_linie()
+            if self.sprawdz("TO"):
+                self.spozywaj("TO")
+            self.pomija_nowe_linie()
+            cialo = self.wyrazenie()
+            self.pomija_nowe_linie()
+            inaczej = None
+            if self.sprawdz("INACZEJ"):
+                self.spozywaj("INACZEJ")
+                self.pomija_nowe_linie()
+                inaczej = self.wyrazenie()
+            return InlineJesli(warunek, cialo, inaczej if inaczej else Literal(None))
         if tok.typ == "IDENT":
             nazwa = self.spozywaj().wartosc
             if self.sprawdz("LEWY_NAWIAS"):
@@ -601,11 +864,43 @@ class Parser:
 
         self.blad(f"Nieoczekiwany token w wyrazeniu: {tok}")
 
+    def parse_lambda(self):
+        self.spozywaj("FUNKCJA")
+        self.spozywaj("LEWY_NAWIAS")
+        parametry = []
+        while not self.sprawdz("PRAWY_NAWIAS"):
+            if parametry:
+                self.spozywaj("PRZECINEK")
+            parametry.append(self.spozywaj("IDENT").wartosc)
+        self.spozywaj("PRAWY_NAWIAS")
+        if self.sprawdz("STRZALKA"):
+            self.spozywaj("STRZALKA")
+            cialo = [Zwroc(self.wyrazenie())]
+        else:
+            self.pomija_nowe_linie()
+            self.spozywaj("LEWY_KLAMRA")
+            cialo = Blok()
+            while not self.sprawdz("PRAWY_KLAMRA") and not self.sprawdz("EOF"):
+                self.pomija_nowe_linie()
+                if self.sprawdz("PRAWY_KLAMRA"):
+                    break
+                d = self.deklaracja()
+                if d:
+                    cialo.instrukcje.append(d)
+            self.spozywaj("PRAWY_KLAMRA")
+            return Lambda(parametry, cialo)
+        b = Blok()
+        b.instrukcje = cialo
+        return Lambda(parametry, b)
+
 
 # ── INTERPRETER ──
 
 class BladWykonania(Exception):
-    pass
+    def __init__(self, msg, linia=None):
+        self.msg = msg
+        self.linia = linia
+        super().__init__(f"Linia {linia}: {msg}" if linia else msg)
 
 
 class Kontekst:
@@ -626,6 +921,27 @@ class Kontekst:
     def czy_istnieje(self, nazwa):
         return nazwa in self.zmienne
 
+    def ustaw_lokalnie(self, nazwa, wartosc):
+        # znajdź najbliższy kontekst z tą zmienną i zaktualizuj
+        if nazwa in self.zmienne:
+            self.zmienne[nazwa] = wartosc
+            return True
+        if self.rodzic:
+            return self.rodzic.ustaw_lokalnie(nazwa, wartosc)
+        self.ustaw(nazwa, wartosc)
+        return True
+
+
+class FunkcjaVEX:
+    def __init__(self, nazwa, parametry, cialo, domkniecie):
+        self.nazwa = nazwa
+        self.parametry = parametry
+        self.cialo = cialo
+        self.domkniecie = domkniecie
+
+    def __repr__(self):
+        return f"<funkcja {self.nazwa}({', '.join(self.parametry)})>"
+
 
 class Wbudowane:
     @staticmethod
@@ -633,11 +949,9 @@ class Wbudowane:
         if len(args) != 1:
             raise BladWykonania("dlugosc() wymaga 1 argumentu")
         v = args[0]
-        if isinstance(v, list):
+        if isinstance(v, (list, dict, str)):
             return len(v)
-        if isinstance(v, str):
-            return len(v)
-        raise BladWykonania(f"dlugosc() nie działa dla {type(v)}")
+        raise BladWykonania(f"dlugosc() nie dziala dla {type(v).__name__}")
 
     @staticmethod
     def konwert(args):
@@ -646,22 +960,204 @@ class Wbudowane:
         typ = args[0]
         wart = args[1]
         if typ == "licz":
-            return int(wart) if isinstance(wart, float) and wart == int(wart) else float(wart)
+            try: return int(wart)
+            except: return float(wart)
         if typ == "tekst":
-            return str(wart)
+            return _reprezentacja(wart)
+        if typ == "logiczna":
+            return bool(wart)
         raise BladWykonania(f"Nieznany typ konwersji: {typ}")
 
     @staticmethod
     def losuj(args):
         if len(args) == 2:
             return _random.randint(int(args[0]), int(args[1]))
-        return _random.random()
+        if len(args) == 0:
+            return _random.random()
+        raise BladWykonania("losuj() - 0 lub 2 argumenty")
 
     @staticmethod
     def zaokraglij(args):
         if len(args) == 1:
             return round(args[0])
-        return round(args[0], int(args[1]))
+        if len(args) == 2:
+            return round(args[0], int(args[1]))
+        raise BladWykonania("zaokraglij() wymaga 1 lub 2 argumentow")
+
+    @staticmethod
+    def minf(args):
+        if len(args) < 1:
+            raise BladWykonania("min() wymaga co najmniej 1 argumentu")
+        return min(args)
+
+    @staticmethod
+    def maxf(args):
+        if len(args) < 1:
+            raise BladWykonania("max() wymaga co najmniej 1 argumentu")
+        return max(args)
+
+    @staticmethod
+    def absf(args):
+        if len(args) != 1:
+            raise BladWykonania("abs() wymaga 1 argumentu")
+        return abs(args[0])
+
+    @staticmethod
+    def sqrt(args):
+        if len(args) != 1:
+            raise BladWykonania("sqrt() wymaga 1 argumentu")
+        return math.sqrt(args[0])
+
+    @staticmethod
+    def sinf(args):
+        if len(args) != 1:
+            raise BladWykonania("sin() wymaga 1 argumentu")
+        return math.sin(args[0])
+
+    @staticmethod
+    def cosf(args):
+        if len(args) != 1:
+            raise BladWykonania("cos() wymaga 1 argumentu")
+        return math.cos(args[0])
+
+    @staticmethod
+    def flr(args):
+        if len(args) != 1:
+            raise BladWykonania("flr() wymaga 1 argumentu")
+        return math.floor(args[0])
+
+    @staticmethod
+    def ceil(args):
+        if len(args) != 1:
+            raise BladWykonania("ceil() wymaga 1 argumentu")
+        return math.ceil(args[0])
+
+    @staticmethod
+    def zawiera(args):
+        if len(args) != 2:
+            raise BladWykonania("zawiera() wymaga 2 argumentow")
+        return args[1] in args[0] if isinstance(args[0], (str, list)) else False
+
+    @staticmethod
+    def zastep(args):
+        if len(args) != 3:
+            raise BladWykonania("zastep() wymaga 3 argumentow")
+        return args[0].replace(args[1], args[2])
+
+    @staticmethod
+    def dziel(args):
+        if len(args) != 2:
+            raise BladWykonania("dziel() wymaga 2 argumentow")
+        return args[0].split(args[1])
+
+    @staticmethod
+    def laczenie(args):
+        if len(args) != 2:
+            raise BladWykonania("laczenie() wymaga 2 argumentow")
+        sep = args[1]
+        return sep.join(str(x) for x in args[0])
+
+    @staticmethod
+    def wielkie(args):
+        if len(args) != 1:
+            raise BladWykonania("wielkie() wymaga 1 argumentu")
+        return args[0].upper()
+
+    @staticmethod
+    def male(args):
+        if len(args) != 1:
+            raise BladWykonania("male() wymaga 1 argumentu")
+        return args[0].lower()
+
+    @staticmethod
+    def przytnij(args):
+        if len(args) != 1:
+            raise BladWykonania("przytnij() wymaga 1 argumentu")
+        return args[0].strip()
+
+    @staticmethod
+    def znajdz(args):
+        if len(args) != 2:
+            raise BladWykonania("znajdz() wymaga 2 argumentow")
+        return args[0].find(args[1])
+
+    @staticmethod
+    def dodaj_do(args):
+        if len(args) != 2:
+            raise BladWykonania("dodaj() wymaga 2 argumentow")
+        args[0].append(args[1])
+        return args[0]
+
+    @staticmethod
+    def usun_z(args):
+        if len(args) != 2:
+            raise BladWykonania("usun() wymaga 2 argumentow")
+        return args[0].pop(int(args[1]))
+
+    @staticmethod
+    def odwroc(args):
+        if len(args) != 1:
+            raise BladWykonania("odwroc() wymaga 1 argumentu")
+        return list(reversed(args[0]))
+
+    @staticmethod
+    def sortujf(args):
+        if len(args) != 1:
+            raise BladWykonania("sortuj() wymaga 1 argumentu")
+        return sorted(args[0])
+
+    @staticmethod
+    def suma(args):
+        if len(args) != 1:
+            raise BladWykonania("suma() wymaga 1 argumentu")
+        return sum(args[0])
+
+    @staticmethod
+    def srednia(args):
+        if len(args) != 1:
+            raise BladWykonania("srednia() wymaga 1 argumentu")
+        lst = args[0]
+        return sum(lst) / len(lst) if lst else 0
+
+    @staticmethod
+    def czysc(args):
+        if sys.stdout.isatty():
+            os.system("cls" if os.name == "nt" else "clear")
+        return None
+
+    @staticmethod
+    def czekajf(args):
+        if len(args) != 1:
+            raise BladWykonania("czekaj() wymaga 1 argumentu")
+        _time.sleep(args[0] / 1000.0)
+        return None
+
+    @staticmethod
+    def zakonczf(args):
+        kod = args[0] if args else 0
+        sys.exit(kod)
+
+    @staticmethod
+    def datag(args):
+        import datetime
+        return str(datetime.date.today())
+
+    @staticmethod
+    def czasf(args):
+        import datetime
+        return str(datetime.datetime.now().strftime("%H:%M:%S"))
+
+    @staticmethod
+    def klucze(args):
+        if len(args) != 1 or not isinstance(args[0], dict):
+            raise BladWykonania("klucze() wymaga slownika")
+        return list(args[0].keys())
+
+    @staticmethod
+    def wartosci(args):
+        if len(args) != 1 or not isinstance(args[0], dict):
+            raise BladWykonania("wartosci() wymaga slownika")
+        return list(args[0].values())
 
 
 WBUDOWANE = {
@@ -669,23 +1165,61 @@ WBUDOWANE = {
     "konwert": Wbudowane.konwert,
     "losuj": Wbudowane.losuj,
     "zaokraglij": Wbudowane.zaokraglij,
-    "pisz": lambda args: (print(*[str(a) for a in args]), None)[1],
+    "min": Wbudowane.minf,
+    "max": Wbudowane.maxf,
+    "abs": Wbudowane.absf,
+    "sqrt": Wbudowane.sqrt,
+    "sin": Wbudowane.sinf,
+    "cos": Wbudowane.cosf,
+    "flr": Wbudowane.flr,
+    "ceil": Wbudowane.ceil,
+    "zawiera": Wbudowane.zawiera,
+    "zastep": Wbudowane.zastep,
+    "dziel": Wbudowane.dziel,
+    "laczenie": Wbudowane.laczenie,
+    "wielkie": Wbudowane.wielkie,
+    "male": Wbudowane.male,
+    "przytnij": Wbudowane.przytnij,
+    "znajdz": Wbudowane.znajdz,
+    "dodaj": Wbudowane.dodaj_do,
+    "usun": Wbudowane.usun_z,
+    "odwroc": Wbudowane.odwroc,
+    "sortuj": Wbudowane.sortujf,
+    "suma": Wbudowane.suma,
+    "srednia": Wbudowane.srednia,
+    "czysc": Wbudowane.czysc,
+    "czekaj": Wbudowane.czekajf,
+    "zakoncz": Wbudowane.zakonczf,
+    "data": Wbudowane.datag,
+    "czas": Wbudowane.czasf,
+    "klucze": Wbudowane.klucze,
+    "wartosci": Wbudowane.wartosci,
+    "pisz": lambda args: (print(*[_reprezentacja(a) for a in args]), None)[1],
 }
 
 
 class Interpreter:
-    def __init__(self):
+    def __init__(self, kolor_output=False):
         self.globalny = Kontekst()
         self.funkcje = {}
         self.przerwano = False
+        self.kolor_output = kolor_output
 
     def wykonaj(self, program):
         for d in program.deklaracje:
             if isinstance(d, DeklaracjaFunkcji):
-                self.funkcje[d.nazwa] = d
+                fn = FunkcjaVEX(d.nazwa, d.parametry, d.cialo, self.globalny)
+                self.funkcje[d.nazwa] = fn
         wynik = None
         for d in program.deklaracje:
-            wynik = self.wykonaj_instrukcje(d)
+            if isinstance(d, DeklaracjaFunkcji):
+                continue
+            try:
+                wynik = self.wykonaj_instrukcje(d)
+            except BladWykonania as e:
+                if e.linia is None:
+                    raise
+                raise
             if self.przerwano:
                 break
         return wynik
@@ -703,13 +1237,22 @@ class Interpreter:
         elif isinstance(inst, Przypisanie):
             wart = self.ewaluuj(inst.wyrazenie, kontekst)
             if isinstance(inst.nazwa, str):
-                kontekst.ustaw(inst.nazwa, wart)
+                kontekst.ustaw_lokalnie(inst.nazwa, wart)
             elif isinstance(inst.nazwa, Indeksowanie):
                 obiekt = self.ewaluuj(inst.nazwa.obiekt, kontekst)
-                indeks = int(self.ewaluuj(inst.nazwa.indeks, kontekst))
-                obiekt[indeks] = wart
+                indeks = self.ewaluuj(inst.nazwa.indeks, kontekst)
+                if isinstance(obiekt, dict):
+                    obiekt[_reprezentacja(indeks) if not isinstance(indeks, str) else indeks] = wart
+                else:
+                    obiekt[int(indeks)] = wart
             else:
-                raise BladWykonania(f"Nieprawidlowy cel przypisania: {type(inst.nazwa)}")
+                raise BladWykonania(f"Nieprawidlowy cel przypisania: {type(inst.nazwa).__name__}")
+
+        elif isinstance(inst, PrzypisanieZlozone):
+            stara = kontekst.pobierz(inst.nazwa)
+            tmp_ast = OperatorBinarny(Literal(stara), inst.operator[0], inst.wyrazenie)
+            nowa = self.ewaluuj(tmp_ast, kontekst)
+            kontekst.ustaw_lokalnie(inst.nazwa, nowa)
 
         elif isinstance(inst, Jesli):
             if self.ewaluuj(inst.warunek, kontekst):
@@ -731,6 +1274,20 @@ class Interpreter:
                     self.przerwano = False
                     break
 
+        elif isinstance(inst, Az):
+            max_iter = 100000
+            count = 0
+            while True:
+                self.wykonaj_blok(inst.cialo, kontekst)
+                count += 1
+                if count > max_iter:
+                    raise BladWykonania("Przekroczono limit iteracji (100000)")
+                if self.przerwano:
+                    self.przerwano = False
+                    break
+                if not self.ewaluuj(inst.warunek, kontekst):
+                    break
+
         elif isinstance(inst, Dla):
             iter = self.ewaluuj(inst.iterowalne, kontekst)
             for wart in iter:
@@ -741,9 +1298,32 @@ class Interpreter:
                     self.przerwano = False
                     break
 
+        elif isinstance(inst, Wybierz):
+            wart = self.ewaluuj(inst.wyrazenie, kontekst)
+            dopasowano = False
+            for p in inst.przypadki:
+                for w in p.wartosci:
+                    if self.ewaluuj(w, kontekst) == wart:
+                        self.wykonaj_blok(p.cialo, kontekst)
+                        dopasowano = True
+                        break
+                if dopasowano:
+                    break
+            if not dopasowano and inst.domyslnie:
+                self.wykonaj_blok(inst.domyslnie, kontekst)
+
         elif isinstance(inst, Pisz):
             wart = self.ewaluuj(inst.wyrazenie, kontekst)
             print(_reprezentacja(wart))
+
+        elif isinstance(inst, PiszKolorowo):
+            wart = self.ewaluuj(inst.wyrazenie, kontekst)
+            txt = _reprezentacja(wart)
+            kolor = inst.kolor
+            if self.kolor_output and kolor in KOLORY_ANSI:
+                print(f"\033[{KOLORY_ANSI[kolor]}m{txt}\033[0m")
+            else:
+                print(f"[{kolor}] {txt}")
 
         elif isinstance(inst, Zwroc):
             return ("zwroc", self.ewaluuj(inst.wyrazenie, kontekst))
@@ -751,17 +1331,28 @@ class Interpreter:
         elif isinstance(inst, Czytaj):
             return input()
 
+        elif isinstance(inst, Czysc):
+            os.system("cls" if os.name == "nt" else "clear")
+
+        elif isinstance(inst, Czekaj):
+            ms = self.ewaluuj(inst.wyrazenie, kontekst)
+            _time.sleep(ms / 1000.0)
+
+        elif isinstance(inst, Zakoncz):
+            kod = self.ewaluuj(inst.wyrazenie, kontekst) if inst.wyrazenie else 0
+            sys.exit(kod)
+
         elif isinstance(inst, Przerwij):
             self.przerwano = True
 
         elif isinstance(inst, Kontynuuj):
             self.przerwano = True
-            # handled by loop
 
         elif isinstance(inst, WywolanieFunkcji):
             return self.wywolaj(inst.nazwa, [self.ewaluuj(a, kontekst) for a in inst.argumenty], kontekst)
 
-        elif isinstance(inst, (Literal, OperatorBinarny, OperatorUnarny, Zmienna, TablicaLiteral, Indeksowanie, Zakres)):
+        elif isinstance(inst, (Literal, OperatorBinarny, OperatorUnarny, Zmienna, TablicaLiteral,
+                                Indeksowanie, Zakres, SlownikLiteral, InlineJesli, Lambda)):
             return self.ewaluuj(inst, kontekst)
 
         return None
@@ -815,10 +1406,20 @@ class Interpreter:
         if isinstance(wyrazenie, TablicaLiteral):
             return [self.ewaluuj(e, kontekst) for e in wyrazenie.elementy]
 
+        if isinstance(wyrazenie, SlownikLiteral):
+            d = {}
+            for para in wyrazenie.pary:
+                klucz = self.ewaluuj(para.klucz, kontekst)
+                wart = self.ewaluuj(para.wartosc, kontekst)
+                d[_reprezentacja(klucz) if not isinstance(klucz, str) else klucz] = wart
+            return d
+
         if isinstance(wyrazenie, Indeksowanie):
             obiekt = self.ewaluuj(wyrazenie.obiekt, kontekst)
-            indeks = int(self.ewaluuj(wyrazenie.indeks, kontekst))
-            return obiekt[indeks]
+            indeks = self.ewaluuj(wyrazenie.indeks, kontekst)
+            if isinstance(obiekt, dict):
+                return obiekt.get(_reprezentacja(indeks) if not isinstance(indeks, str) else indeks, None)
+            return obiekt[int(indeks)]
 
         if isinstance(wyrazenie, Zakres):
             start = int(self.ewaluuj(wyrazenie.start, kontekst))
@@ -829,6 +1430,15 @@ class Interpreter:
             argi = [self.ewaluuj(a, kontekst) for a in wyrazenie.argumenty]
             return self.wywolaj(wyrazenie.nazwa, argi, kontekst)
 
+        if isinstance(wyrazenie, InlineJesli):
+            if self.ewaluuj(wyrazenie.warunek, kontekst):
+                return self.ewaluuj(wyrazenie.cialo, kontekst)
+            return self.ewaluuj(wyrazenie.inaczej, kontekst)
+
+        if isinstance(wyrazenie, Lambda):
+            fn = FunkcjaVEX("<lambda>", wyrazenie.parametry, wyrazenie.cialo, kontekst)
+            return fn
+
         if isinstance(wyrazenie, Czytaj):
             return input()
 
@@ -837,17 +1447,17 @@ class Interpreter:
             print(_reprezentacja(wart))
             return None
 
-        raise BladWykonania(f"Nieznane wyrazenie: {type(wyrazenie)}")
+        raise BladWykonania(f"Nieznane wyrazenie: {type(wyrazenie).__name__}")
 
     def wywolaj(self, nazwa, argumenty, kontekst):
         if nazwa in WBUDOWANE:
             return WBUDOWANE[nazwa](argumenty)
         if nazwa in self.funkcje:
-            func = self.funkcje[nazwa]
-            lokalny = Kontekst(self.globalny)
-            for p, a in zip(func.parametry, argumenty):
+            fn = self.funkcje[nazwa]
+            lokalny = Kontekst(fn.domkniecie if hasattr(fn, 'domkniecie') else self.globalny)
+            for p, a in zip(fn.parametry, argumenty):
                 lokalny.ustaw(p, a)
-            wynik = self.wykonaj_blok(func.cialo, lokalny)
+            wynik = self.wykonaj_blok(fn.cialo, lokalny)
             if wynik and isinstance(wynik, tuple) and wynik[0] == "zwroc":
                 return wynik[1]
             return None
@@ -870,15 +1480,20 @@ def _reprezentacja(w):
         return str(int(w))
     if isinstance(w, list):
         return "[" + ", ".join(_reprezentacja(x) for x in w) + "]"
+    if isinstance(w, dict):
+        items = ", ".join(f"{_reprezentacja(k)} => {_reprezentacja(v)}" for k, v in w.items())
+        return "{" + items + "}"
+    if isinstance(w, FunkcjaVEX):
+        return f"<funkcja {w.nazwa}>"
     return str(w)
 
 
 # ── CLI ──
 
-def uruchom_plik(sciezka):
+def uruchom_plik(sciezka, kolor=False):
     with open(sciezka, "r", encoding="utf-8") as f:
         kod = f.read()
-    interp = Interpreter()
+    interp = Interpreter(kolor_output=kolor)
     try:
         interp.uruchom(kod)
     except (SyntaxError, BladWykonania) as e:
@@ -888,8 +1503,8 @@ def uruchom_plik(sciezka):
 
 
 def repl():
-    print("VEXLang v1.0 - wpisz 'exit' lub Ctrl+C aby wyjsc")
-    interp = Interpreter()
+    print(f"VEXLang v{VERSION} - wpisz 'exit' lub Ctrl+C aby wyjsc")
+    interp = Interpreter(kolor_output=sys.stdout.isatty())
     while True:
         try:
             kod = input(">>> ")
@@ -897,7 +1512,6 @@ def repl():
                 break
             if not kod.strip():
                 continue
-            # zbieraj linie a nie jest kompletne
             while kod.count("{") != kod.count("}") or (kod.count("(") != kod.count(")")):
                 kod += "\n" + input("... ")
             interp.uruchom(kod)
@@ -909,7 +1523,8 @@ def repl():
 
 
 if __name__ == "__main__":
-    if len(sys.argv) > 1:
-        sys.exit(uruchom_plik(sys.argv[1]))
+    kolor = "--kolor" in sys.argv or sys.stdout.isatty()
+    if len(sys.argv) > 1 and sys.argv[1] != "--kolor":
+        sys.exit(uruchom_plik(sys.argv[1], kolor))
     else:
         repl()

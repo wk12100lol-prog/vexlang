@@ -5,9 +5,9 @@ from tkinter import filedialog, messagebox
 from urllib.request import urlopen, Request
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from vexlang import Lexer, Parser, Interpreter, SLOWA_KLUCZOWE
+from vexlang import Lexer, Parser, Interpreter, SLOWA_KLUCZOWE, KOLORY_ANSI, KOLORY_HEX
 
-VERSION = "1.2.1"
+VERSION = "2.0.0"
 GITHUB_REPO = "wk12100lol-prog/vexlang"
 
 try:
@@ -148,6 +148,16 @@ class VEXLangEditor(ctk.CTk):
                                    activate_scrollbars=False)
         self._out.pack(fill="both", expand=True)
         self._out.configure(state="disabled")
+        self._out._textbox.tag_config("out_ok", foreground="#00ffa3")
+        self._out._textbox.tag_config("out_err", foreground="#ef4444")
+        self._out._textbox.tag_config("out_info", foreground="#40bfff")
+        for k, v in [
+            ("czerwony", "#ef4444"), ("zielony", "#00ffa3"), ("zolty", "#ffd700"),
+            ("niebieski", "#40bfff"), ("fioletowy", "#a855f7"), ("cyjan", "#00ffff"),
+            ("bialy", "#ffffff"), ("rozowy", "#ff6b9d"), ("pomaranczowy", "#ffa640"),
+            ("szary", "#888888"),
+        ]:
+            self._out._textbox.tag_config(f"clr_{k}", foreground=v)
 
         # status
         st = ctk.CTkFrame(self, height=22, corner_radius=0)
@@ -220,7 +230,11 @@ class VEXLangEditor(ctk.CTk):
             for tok, s, e in _tokenize(line):
                 if tok in SLOWA_KLUCZOWE:
                     tb.tag_add("kw", f"{i}.{s}", f"{i}.{e}")
-                elif tok in ("dlugosc","konwert","losuj","zaokraglij"):
+                elif tok in ("dlugosc","konwert","losuj","zaokraglij","min","max","abs",
+                             "sqrt","sin","cos","flr","ceil","zawiera","zastep","dziel",
+                             "laczenie","wielkie","male","przytnij","znajdz","dodaj","usun",
+                             "odwroc","sortuj","suma","srednia","czysc","czekaj","zakoncz",
+                             "data","czas","klucze","wartosci"):
                     tb.tag_add("blt", f"{i}.{s}", f"{i}.{e}")
                 elif _is_num(tok):
                     tb.tag_add("num", f"{i}.{s}", f"{i}.{e}")
@@ -384,7 +398,7 @@ class VEXLangEditor(ctk.CTk):
         try:
             sys.stdout = buf
             sys.stdin = io.StringIO()
-            interp = Interpreter()
+            interp = Interpreter(kolor_output=True)
             interp.uruchom(code)
         except SyntaxError as e:
             err.write(f"Składnia: {e}\n")
@@ -410,7 +424,7 @@ class VEXLangEditor(ctk.CTk):
     def _repl(self):
         self._switch_out("REPL")
         self._out_write("VEXLang REPL — exit aby wyjść\n\n", "info")
-        self._repl_interp = Interpreter()
+        self._repl_interp = Interpreter(kolor_output=True)
         threading.Thread(target=self._repl_loop, daemon=True).start()
 
     def _repl_loop(self):
@@ -455,10 +469,15 @@ class VEXLangEditor(ctk.CTk):
     def _out_write(self, text, tag=None):
         self._out.configure(state="normal")
         if tag:
-            # tags defined on underlying text widget
-            self._out.insert("end", text, tag)
+            self._out.insert("end", text, f"out_{tag}")
         else:
-            self._out.insert("end", text)
+            # parse ANSI escape codes
+            import re as _re
+            parts = _re.split(r'(\033\[\d+m)', text)
+            for p in parts:
+                if p.startswith('\033[') and p.endswith('m'):
+                    continue  # skip ANSI codes
+                self._out.insert("end", p)
         self._out.see("end")
         self._out.configure(state="disabled")
 
